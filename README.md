@@ -16,6 +16,6 @@ Envelope.from_function
 
 ```
 
-In addition to the `value_at` function, utilities have been included to append and insert new points, insert a new interpolated control point without changing the curve. Envelopes (and EnvelopeSegments) can be added, subtracted, multiplied and divided, with these operations yielding new Envelopes that are close approximations to the resulting function using piecewise exponential curves.
+In addition to the `value_at` function, utilities have been included to append and insert new points, insert a new interpolated control point without changing the curve, integrate over intervals, find the maximum slope reached, and find the average value, among other things. Envelopes (and EnvelopeSegments) can be added, subtracted, multiplied and divided, with these operations yielding new Envelopes that are close approximations to the resulting function using piecewise exponential curves.
 
 _expenvelope_ a key dependency of the `clockblocks` package for managing the flow of musical time, as well as of `scamp`, a Suite for Composing Algorithmic Music in Python. All three packages are being developed concurrently. 
