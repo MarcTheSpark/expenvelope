@@ -1,4 +1,4 @@
-from .utilities import _make_envelope_segments_from_function
+from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
 from .envelope_segment import *
 from copy import deepcopy
 import numbers
@@ -336,13 +336,21 @@ class Envelope:
 
     # ----------------------- Appending / removing segments --------------------------
 
-    def append_segment(self, level, duration, curve_shape=0.0, tolerance=0):
+    def append_segment(self, level, duration, curve_shape=None, tolerance=0, halfway_level=None):
         """
         Append a segment to the end of the curve ending at level and lasting for duration.
         If we're adding a linear segment to a linear segment, then we extend the last linear segment
         instead of adding a new one if the level is within tolerance of where the last one was headed
-        :return:
+        :param level: the level we're going to
+        :param duration: the duration of the new segment
+        :param curve_shape: defaults to 0 (linear)
+        :param tolerance: tolerance for extending a linear segment rather than adding a new one
+        :param halfway_level: alternate way of defining the curve shape. If this is set and the curve shape is
+        not then we use this to determine the curve shape.
         """
+        curve_shape = curve_shape if curve_shape is not None \
+            else _curve_shape_from_start_mid_and_end_levels(self.end_level(), halfway_level, level) \
+            if halfway_level is not None else 0
         if self.segments[-1].duration == 0:
             # the previous segment has no length. Are we also adding a segment with no length?
             if duration == 0:

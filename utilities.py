@@ -1,3 +1,6 @@
+import math
+
+
 def _make_envelope_segments_from_function(function, domain_start, domain_end, resolution_multiple=1,
                                           key_point_precision=100, key_point_iterations=5):
     from .envelope_segment import EnvelopeSegment
@@ -57,33 +60,49 @@ def _get_extrema_and_inflection_points(function, domain_start, domain_end, resol
             if first_difference is not None:
                 # check if first difference changes sign in the first derivative
                 if this_difference * first_difference < 0:
-                    # there's been a change of sign, so it's a local min or max. split here
-                    new_point = _get_extrema_and_inflection_points(
-                        function, t - 2 * step, t + 2 * step, max(10, int(resolution / 2)), iterations - 1,
-                        include_endpoints=False, return_on_first_point=True
-                    ) if iterations > 1 else t
-
-                    if return_on_first_point:
-                        return new_point
+                    # there's been a change of sign, so there's a local min or max somewhere between the last
+                    # step and this one. If we are iterating further, search for the precise location
+                    if iterations > 1:
+                        extremum = _get_extrema_and_inflection_points(
+                            function, t - step, t, max(10, int(resolution / 2)), iterations - 1,
+                            include_endpoints=False, return_on_first_point=True
+                        )
                     else:
-                        key_points.append(new_point)
+                        # otherwise, simply use the average
+                        extremum = t - step / 2
+
+                    # if we return_on_first_point (as we do in iteration), just return
+                    if return_on_first_point:
+                        return extremum
+                    else:
+                        # otherwise check that it's not redundant and add it to the list
+                        if extremum not in key_points:
+                            key_points.append(extremum)
 
                 this_second_difference = round(this_difference - first_difference, 10)
 
                 if second_difference is not None:
                     # check if second difference changes sign
                     if this_second_difference * second_difference < 0:
-                        # there's been a change of sign, so it's an inflection point. split here
-                        if t not in key_points:
-                            new_point = _get_extrema_and_inflection_points(
-                                function, t - 2 * step, t + 2 * step, max(10, int(resolution / 2)), iterations - 1,
+                        # there's been a change of sign, so there's an inflection point somewhere between the last
+                        # step and this one. If we are iterating further, search for the precise location
+                        if iterations > 1:
+                            inflection_point = _get_extrema_and_inflection_points(
+                                function, t - step, t, max(10, int(resolution / 2)), iterations - 1,
                                 include_endpoints=False, return_on_first_point=True
-                            ) if iterations > 1 else t
+                            )
+                        else:
+                            # otherwise, simply use the average
+                            inflection_point = t - step / 2
 
-                            if return_on_first_point:
-                                return new_point
-                            else:
-                                key_points.append(new_point)
+                        # if we return_on_first_point (as we do in iteration), just return
+                        if return_on_first_point:
+                            return inflection_point
+                        else:
+                            # otherwise check that it's not redundant and add it to the list
+                            if inflection_point not in key_points:
+                                key_points.append(inflection_point)
+
                 second_difference = this_second_difference
             first_difference = this_difference
         value = this_value
@@ -97,3 +116,15 @@ def _get_extrema_and_inflection_points(function, domain_start, domain_end, resol
         return [domain_start] + key_points + [domain_end]
     else:
         return key_points
+
+
+def _curve_shape_from_start_mid_and_end_levels(start_level, halfway_level, end_level):
+    # utility for finding the curvature given the level halfway as a guide
+    if start_level == end_level:
+        # if the end_level equals the start_level, then the best we can do is a flat line
+        # hopefully this happens because it truly is a flat line, not a bump or a trough
+        return 0
+    assert min(start_level, end_level) < halfway_level < max(start_level, end_level), \
+        "Halfway level must be strictly between start and end levels, or equal to both."
+    halfway_level_normalized = (halfway_level - start_level) / (end_level - start_level)
+    return 2 * math.log(1 / halfway_level_normalized - 1)

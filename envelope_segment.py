@@ -1,4 +1,4 @@
-from .utilities import _make_envelope_segments_from_function
+from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
 import numbers
 import math
 
@@ -35,17 +35,7 @@ class EnvelopeSegment:
 
     @classmethod
     def from_endpoints_and_halfway_level(cls, start_time, end_time, start_level, end_level, halfway_level):
-        if start_level == halfway_level == end_level:
-            return cls(start_time, end_time, start_level, end_level, 0)
-        assert min(start_level, end_level) < halfway_level < max(start_level, end_level), \
-            "Halfway level must be strictly between start and end levels, or equal to both."
-        # class method that allows us to give a guide point half way through instead of giving
-        # the curve_shape directly. This lets us try to match a curve that's not perfectly the right type.
-        if end_level == start_level:
-            # if the end_level equals the start_level, then the best we can do is a straight line
-            return cls(start_time, end_time, start_level, end_level, 0)
-        halfway_level_normalized = (halfway_level - start_level) / (end_level - start_level)
-        curve_shape = 2 * math.log(1 / halfway_level_normalized - 1)
+        curve_shape = _curve_shape_from_start_mid_and_end_levels(start_level, halfway_level, end_level)
         return cls(start_time, end_time, start_level, end_level, curve_shape)
 
     def _calculate_coefficients(self):
