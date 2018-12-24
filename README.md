@@ -2,7 +2,7 @@
 
 _expenvelope_ is a python library for managing piecewise exponential curves, original intended as a tool for algorithmic music composition. Curves are simple to make, expressive, and useful for controlling dynamics, tempo, and other higher-level parameters. 
 
-The central `Envelope` class bears some relation to SuperCollider's _Env_ object, and is represented behind the scenes as a contiguous set of `EnvelopeSegments`. There are a number of different class methods available for constructing envelopes, including:
+The central `Envelope` class bears some relation to SuperCollider's [_Env_](http://doc.sccode.org/Classes/Env.html) object, and is represented behind the scenes as a contiguous set of `EnvelopeSegments`. There are a number of different class methods available for constructing envelopes, including:
 
 ```python
 Envelope.from_levels
