@@ -709,7 +709,7 @@ class Envelope:
             y_values.extend(segment_y_values)
         return x_values, y_values
 
-    def show_plot(self, title=None, resolution=25, show_segment_divisions=True):
+    def show_plot(self, title=None, resolution=25, show_segment_divisions=True, x_range=None, y_range=None):
         try:
             import matplotlib.pyplot as plt
         except ImportError:
@@ -718,6 +718,10 @@ class Envelope:
         ax.plot(*self.get_graphable_point_pairs(resolution))
         if show_segment_divisions:
             ax.plot(self.times, self.levels, 'o')
+        if x_range is not None:
+            plt.xlim(x_range)
+        if y_range is not None:
+            plt.ylim(y_range)
         ax.set_title('Graph of Envelope' if title is None else title)
         plt.show()
 
