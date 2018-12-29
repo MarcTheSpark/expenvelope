@@ -56,3 +56,9 @@ a = Envelope.adsr(0.2, 1.0, 0.3, 0.7, 3.0, 1.0, decay_shape=-2, release_shape=3)
 b = Envelope.adsr(0.2, 1.0, 0.3, 0.7, 3.0, 1.0, decay_shape=-2, release_shape=3).shift_horizontal(3) + 1
 ((a + b) * (a - b)).show_plot("Math on envelopes #1")
 (a / b).show_plot("Math on envelopes #2")
+
+envelope_from_points_with_curve_shapes.append_envelope(envelope_from_function)
+envelope_from_points_with_curve_shapes.show_plot("Appending Envelope")
+
+attack_sustain_release_envelope.prepend_envelope(envelope_from_function)
+attack_sustain_release_envelope.show_plot("Prepending Envelope")

@@ -472,6 +472,26 @@ class Envelope:
                     self.pop_segment_from_start()
                 return
 
+    def append_envelope(self, envelope_to_append: 'Envelope'):
+        """
+        Extends this envelope by another one (shifted to start at the end of this one.
+        """
+        if self.end_level() != envelope_to_append.start_level():
+            self.append_segment(envelope_to_append.start_level(), 0)
+        for segment in envelope_to_append.segments:
+            self.append_segment(segment.end_level, segment.duration, segment.curve_shape)
+        return self
+
+    def prepend_envelope(self, envelope_to_prepend: 'Envelope'):
+        """
+        Same as above, but prepending a segment.
+        """
+        if self.start_level() != envelope_to_prepend.end_level():
+            self.prepend_segment(envelope_to_prepend.end_level(), 0)
+        for segment in reversed(envelope_to_prepend.segments):
+            self.prepend_segment(segment.start_level, segment.duration, segment.curve_shape)
+        return self
+
     # ------------------------ Interpolation, Integration --------------------------
 
     def value_at(self, t, from_left=False):
