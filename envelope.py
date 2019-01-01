@@ -17,7 +17,8 @@ class Envelope:
             self.segments = None
             self.initialize()
         else:
-            self.segments = segments
+            self.segments = list(segments)
+            assert all(isinstance(x, EnvelopeSegment) for x in self.segments)
 
     def initialize(self, levels=(0, 0), durations=(0,), curve_shapes=None, offset=0):
         """
@@ -243,7 +244,18 @@ class Envelope:
             assert hasattr(t_range, "__len__") and len(t_range) == 2 and t_range[0] < t_range[1]
             t1, t2 = t_range
             points_to_check = [self.value_at(t1), self.value_at(t2)]
-            for segment in self.segments:
+
+            # TODO: replace this with bisect.bisect and store the segment start times in a tuple
+            # if there are a lot of segments, we bisect the list repeatedly until we get close t
+            start_index = 0
+            while True:
+                new_start_index = start_index + (len(self.segments) - start_index) // 2
+                if self.segments[new_start_index].end_time < t1 and len(self.segments) - new_start_index > 3:
+                    start_index = new_start_index
+                else:
+                    break
+
+            for segment in self.segments[start_index:]:
                 if t1 <= segment.start_time <= t2:
                     points_to_check.append(segment.start_level)
                 if t1 <= segment.end_time <= t2:
@@ -504,7 +516,18 @@ class Envelope:
         """
         if t < self.start_time():
             return self.start_level()
-        for segment in self.segments:
+
+        # TODO: replace this with bisect.bisect and store the segment start times in a tuple
+        # if there are a lot of segments, we bisect the list repeatedly until we get close t
+        start_index = 0
+        while True:
+            new_start_index = start_index + (len(self.segments) - start_index) // 2
+            if self.segments[new_start_index].end_time < t and len(self.segments) - new_start_index > 3:
+                start_index = new_start_index
+            else:
+                break
+
+        for segment in self.segments[start_index:]:
             if t in segment or from_left and t == segment.end_time:
                 return segment.value_at(t)
         return self.end_level()
@@ -522,6 +545,7 @@ class Envelope:
         # now that the edge conditions are covered, we just add up the segment integrals
         integral = 0
 
+        # TODO: replace this with bisect.bisect and store the segment start times in a tuple
         # if there are a lot of segments, we bisect the list repeatedly until we get close t
         start_index = 0
         while True:
