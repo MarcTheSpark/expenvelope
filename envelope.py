@@ -245,21 +245,13 @@ class Envelope:
             t1, t2 = t_range
             points_to_check = [self.value_at(t1), self.value_at(t2)]
 
-            # TODO: replace this with bisect.bisect and store the segment start times in a tuple
-            # if there are a lot of segments, we bisect the list repeatedly until we get close t
-            start_index = 0
-            while True:
-                new_start_index = start_index + (len(self.segments) - start_index) // 2
-                if self.segments[new_start_index].end_time < t1 and len(self.segments) - new_start_index > 3:
-                    start_index = new_start_index
-                else:
-                    break
-
-            for segment in self.segments[start_index:]:
+            for segment in self.segments[self._get_index_of_segment_at(t1, left_most=True):]:
                 if t1 <= segment.start_time <= t2:
                     points_to_check.append(segment.start_level)
                 if t1 <= segment.end_time <= t2:
                     points_to_check.append(segment.end_level)
+                if segment.end_time > t2:
+                    break
             return max(points_to_check)
 
     def average_level(self):
@@ -289,6 +281,41 @@ class Envelope:
         return self.segments[0].start_time
 
     # ----------------------- Insertion of new control points --------------------------
+    
+    def _get_index_of_segment_at(self, t, left_most=False, right_most=False):
+        # first take care of the case that t is outside the envelope by just returning the first or last segment index
+        # (also, might as well include the cases where we're inside those segments too)
+        if t > self.segments[-1].start_time:
+            return len(self.segments) - 1
+        elif t < self.segments[0].end_time:
+            return 0
+        # if there are a lot of segments, we bisect the list repeatedly until we get close t
+        lo_index = 0
+        hi_index = len(self.segments)
+        while True:
+            test_index = (lo_index + hi_index) // 2
+            this_segment = self.segments[test_index]
+            if t in this_segment:
+                # found it! except there's a wrinkle; since there can be zero-length segments, there might be more
+                # than one that contains t. So left_most and right_most let us specify if we want the left or right one
+                if left_most:
+                    while test_index > 0 and self.segments[test_index - 1].end_time >= t:
+                        test_index -= 1
+                elif right_most:
+                    while test_index < len(self.segments) - 1 and self.segments[test_index + 1].start_time <= t:
+                        test_index += 1
+                return test_index
+            else:
+                if lo_index == hi_index - 1:
+                    # this segment doesn't work, but it's the only remaining option
+                    # This shouldn't happen
+                    raise IndexError("Can't find segment index; Envelope must be malformed.")
+                if this_segment.start_time > t:
+                    # test_index is too high, so don't look any higher
+                    hi_index = test_index
+                else:
+                    # test index is too low, so don't look any lower
+                    lo_index = test_index
 
     def insert(self, t, level, curve_shape_in=0, curve_shape_out=0):
         """
@@ -517,20 +544,9 @@ class Envelope:
         if t < self.start_time():
             return self.start_level()
 
-        # TODO: replace this with bisect.bisect and store the segment start times in a tuple
-        # if there are a lot of segments, we bisect the list repeatedly until we get close t
-        start_index = 0
-        while True:
-            new_start_index = start_index + (len(self.segments) - start_index) // 2
-            if self.segments[new_start_index].end_time < t and len(self.segments) - new_start_index > 3:
-                start_index = new_start_index
-            else:
-                break
+        containing_segment_index = self._get_index_of_segment_at(t, left_most=from_left, right_most=not from_left)
 
-        for segment in self.segments[start_index:]:
-            if t in segment or from_left and t == segment.end_time:
-                return segment.value_at(t)
-        return self.end_level()
+        return self.segments[containing_segment_index].value_at(t)
 
     def integrate_interval(self, t1, t2):
         if t1 == t2:
@@ -545,17 +561,7 @@ class Envelope:
         # now that the edge conditions are covered, we just add up the segment integrals
         integral = 0
 
-        # TODO: replace this with bisect.bisect and store the segment start times in a tuple
-        # if there are a lot of segments, we bisect the list repeatedly until we get close t
-        start_index = 0
-        while True:
-            new_start_index = start_index + (len(self.segments) - start_index) // 2
-            if self.segments[new_start_index].end_time < t1 and len(self.segments) - new_start_index > 3:
-                start_index = new_start_index
-            else:
-                break
-
-        for segment in self.segments[start_index:]:
+        for segment in self.segments[self._get_index_of_segment_at(t1):]:
             if t1 < segment.start_time:
                 if t2 > segment.start_time:
                     if t2 <= segment.end_time:
@@ -567,7 +573,7 @@ class Envelope:
                         integral += segment.integrate_segment(segment.start_time, segment.end_time)
             elif t1 in segment:
                 # since we know that t2 > t1, there's two possibilities
-                if t2 in segment:
+                if t2 in segment or t2 == segment.end_time:
                     # this segment contains our whole integration interval
                     integral += segment.integrate_segment(t1, t2)
                     break
