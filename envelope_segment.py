@@ -302,7 +302,8 @@ class EnvelopeSegment:
     def __contains__(self, t):
         # checks if the given time is contained within this envelope segment
         # maybe this is silly, but it seemed a little convenient
-        return self.start_time <= t < self.end_time
+        return self.start_time <= t < self.end_time \
+               or t == self.start_time  # in case start_time == end_time, we still want it to count
 
     def __repr__(self):
         return "EnvelopeSegment({}, {}, {}, {}, {})".format(self.start_time, self.end_time, self.start_level,
