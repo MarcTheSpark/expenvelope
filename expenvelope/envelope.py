@@ -628,7 +628,9 @@ class Envelope:
             else:
                 # if this segment was static, then keep the direction we had going in
                 direction = last_direction
-                if include_saddle_points and segment.start_time not in local_extrema:
+                # if we want to include saddle points, then check that the last segment was not also flat
+                # (if there's a series of flat segments in a row, only count the first one as a saddle point)
+                if include_saddle_points and last_direction != 0 and segment.start_time not in local_extrema:
                     local_extrema.append(segment.start_time)
             if last_direction * direction < 0 and segment.start_time not in local_extrema:
                 # we changed sign, since
