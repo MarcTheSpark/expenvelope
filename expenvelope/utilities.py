@@ -1,4 +1,5 @@
 import math
+import bisect
 
 
 def _make_envelope_segments_from_function(function, domain_start, domain_end, resolution_multiple=1,
@@ -128,3 +129,48 @@ def _curve_shape_from_start_mid_and_end_levels(start_level, halfway_level, end_l
         "Halfway level must be strictly between start and end levels, or equal to both."
     halfway_level_normalized = (halfway_level - start_level) / (end_level - start_level)
     return 2 * math.log(1 / halfway_level_normalized - 1)
+
+
+# ----------------------------------------- curvature to % filled utilities ----------------------------------------
+
+
+def get_filled_amount_from_curvature(curvature):
+    """
+    For a given segment going from low to high, the proportion of the area between the low mark and the curve divided
+    by the area between the low mark and the high mark can vary from 0 (as curvature approaches infinity) to 1
+    (as curvature approaches negative infinity), with a value of 0.5 when the curvature is zero. This calculates that
+    via the equation `P_filled =  1 / S - 1 / (e^S - 1)`.
+    """
+    return 1 / curvature - 1 / (math.exp(curvature) - 1) if curvature != 0 else 0.5
+
+
+"""
+Since the equation getting proportion filled from curvature is not invertible analytically, we use a table look-up
+to do the inverse. We use a resolution of 0.001 for the range between -20 and 20; outside of that range, the e^S term 
+is so large that we can invert a simplified function analytically.
+"""
+_curvature_values = [x / 1000 for x in reversed(range(-20000, 20001))]
+_filled_amount_as_function_of_curvature = [get_filled_amount_from_curvature(s) for s in _curvature_values]
+
+
+def get_curvature_from_filled_amount(filled_amount):
+    """
+    Returns the curvature for a given portion of the area described above that is filled.
+    from tests, the max error here is about 2 * 10^-9, occurring right at the switch from table lookup to
+    using the simple substitute functions. Also it takes about 10^-5 seconds to calculate. Not too shabby!
+    """
+    assert 0 < filled_amount < 1
+    if 0.05 <= filled_amount <= 0.95:
+        index = bisect.bisect(_filled_amount_as_function_of_curvature, filled_amount)
+        upper_percent = _filled_amount_as_function_of_curvature[index]
+        lower_percent = _filled_amount_as_function_of_curvature[index - 1]
+        fractional_part = (filled_amount - lower_percent) / (upper_percent - lower_percent)
+        return _curvature_values[index - 1] + fractional_part * (_curvature_values[index] - _curvature_values[index - 1])
+    elif filled_amount > 0.95:
+        # for curvature < -20, 1 / S - 1 / (e^S - 1) is almost exactly 1 / S + 1
+        # thus we can just act like P_filled = 1 / S + 1, and thus S = 1 / (P_filled - 1)
+        return 1 / (filled_amount - 1)
+    else:
+        # for curvature > 20, 1 / S - 1 / (e^S - 1) is almost exactly 1 / S
+        # thus we can just act like P_filled = 1 / S, and thus S = 1 / P_filled
+        return 1 / filled_amount
