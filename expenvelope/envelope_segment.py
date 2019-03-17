@@ -1,4 +1,5 @@
-from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
+from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, \
+    get_curvature_from_filled_amount
 import numbers
 import math
 
@@ -160,6 +161,27 @@ class EnvelopeSegment:
         segment_length = self.end_time - self.start_time
 
         return segment_length * (self._segment_antiderivative(norm_t2) - self._segment_antiderivative(norm_t1))
+
+    def get_integral_range(self):
+        """
+        Returns the range of possible values for the integral of this segment available by tweaking curvature
+        :return a tuple of (low, high)
+        """
+        return self.duration * min(self.start_level, self.end_level), \
+               self.duration * max(self.start_level, self.end_level)
+
+    def set_curvature_to_desired_integral(self, desired_integral):
+        """
+        Changes the curvature of this segment so as to hit a desired target for the integral of the segment
+        :param desired_integral: target value of the segment integral
+        """
+        low, high = self.get_integral_range()
+        assert low < desired_integral < high
+        if self.end_level > self.start_level:
+            self._curve_shape = get_curvature_from_filled_amount((desired_integral - low) / (high - low))
+        else:
+            self._curve_shape = get_curvature_from_filled_amount(1 - (desired_integral - low) / (high - low))
+        self._calculate_coefficients()
 
     def split_at(self, t):
         """

@@ -155,9 +155,9 @@ _filled_amount_as_function_of_curvature = [get_filled_amount_from_curvature(s) f
 
 def get_curvature_from_filled_amount(filled_amount):
     """
-    Returns the curvature for a given portion of the area described above that is filled.
-    from tests, the max error here is about 2 * 10^-9, occurring right at the switch from table lookup to
-    using the simple substitute functions. Also it takes about 10^-5 seconds to calculate. Not too shabby!
+    For a given segment going from low to high, returns the curvature for a given portion of the area described above
+    that is filled. from tests, the max error here is about 2 * 10^-9, occurring right at the switch from table lookup
+    to using the simple substitute functions. Also it takes about 10^-5 seconds to calculate. Not too shabby!
     """
     assert 0 < filled_amount < 1
     if 0.05 <= filled_amount <= 0.95:
