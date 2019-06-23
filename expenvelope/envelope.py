@@ -803,6 +803,9 @@ class Envelope:
             "Cannot divide by Envelope that crosses zero"
         return Envelope([segment._reciprocal() for segment in self.segments])
 
+    def __eq__(self, other):
+        return all(this_segment == other_segment for this_segment, other_segment in zip(self.segments, other.segments))
+
     def __add__(self, other):
         if isinstance(other, numbers.Number):
             return Envelope([segment + other for segment in self.segments])

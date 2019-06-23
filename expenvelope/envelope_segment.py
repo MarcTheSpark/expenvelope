@@ -261,6 +261,11 @@ class EnvelopeSegment:
                                                      1 / self.start_level, 1 / self.end_level,
                                                      1 / self.value_at((self.start_time + self.end_time) / 2))
 
+    def __eq__(self, other):
+        return self.start_time == other.start_time and self.end_time == other.end_time \
+               and self._start_level == other._start_level and self._end_level == other._end_level \
+               and self._curve_shape == other._curve_shape
+
     def __neg__(self):
         return EnvelopeSegment(self.start_time, self.end_time,
                                -self.start_level, -self.end_level, self.curve_shape)
