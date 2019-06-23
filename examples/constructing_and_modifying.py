@@ -1,3 +1,10 @@
+"""
+expenvelope Example: Constructing and modifying Envelopes
+
+A fairly comprehensive list of ways to construct and modify Envelopes.
+
+"""
+
 from expenvelope import Envelope
 import math
 
