@@ -13,7 +13,6 @@ Envelope.ar
 Envelope.asr
 Envelope.adsr
 Envelope.from_function
-
 ```
 
 In addition to the central `value_at` function, utilities have been included to append and insert new points, insert a new interpolated control point without changing the curve, integrate over intervals, find the maximum slope reached, and find the average value, among other things. Envelopes (and EnvelopeSegments) can be added, subtracted, multiplied and divided, with these operations yielding new Envelopes that are close approximations to the resulting function using piecewise exponential curves.
