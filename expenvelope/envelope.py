@@ -645,7 +645,8 @@ class Envelope:
         :param change_original: if true, the original Envelope gets turned into the first of the returned tuple
         :return: tuple of Envelopes representing the pieces this has been split into
         """
-        to_split = self if change_original else Envelope([x.clone() for x in self.segments])
+        cls = type(self)
+        to_split = self if change_original else cls([x.clone() for x in self.segments])
 
         # if t is a tuple or list, we split at all of those times and return len(t) + 1 segments
         # This is implemented recursively. If len(t) is 1, t is replaced by t[0]
@@ -674,7 +675,7 @@ class Envelope:
         to_split.insert_interpolated(t)
         for i, segment in enumerate(to_split.segments):
             if segment.start_time == t:
-                second_half = Envelope(to_split.segments[i:])
+                second_half = cls(to_split.segments[i:])
                 to_split.segments = to_split.segments[:i]
                 for second_half_segment in second_half.segments:
                     second_half_segment.start_time -= t
