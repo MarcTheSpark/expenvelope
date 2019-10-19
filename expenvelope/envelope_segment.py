@@ -9,6 +9,7 @@ class EnvelopeSegment:
     def __init__(self, start_time, end_time, start_level, end_level, curve_shape):
         """
         A segment of an envelope, with the ability to perform interpolation and integration
+
         :param curve_shape: 0 is linear, > 0 changes late, < 0 changes early, also, string expressions involving "exp"
         can be given where "exp" stands for the shape that will produce constant proportional change per unit time.
         """
@@ -138,6 +139,7 @@ class EnvelopeSegment:
     def integrate_segment(self, t1, t2):
         """
         Integrate part of this segment.
+
         :param t1: start time (relative to the time zero, not to the start time of this segment)
         :param t2: end time (ditto)
         """
@@ -165,6 +167,7 @@ class EnvelopeSegment:
     def get_integral_range(self):
         """
         Returns the range of possible values for the integral of this segment available by tweaking curvature
+
         :return a tuple of (low, high)
         """
         return self.duration * min(self.start_level, self.end_level), \
@@ -173,6 +176,7 @@ class EnvelopeSegment:
     def set_curvature_to_desired_integral(self, desired_integral):
         """
         Changes the curvature of this segment so as to hit a desired target for the integral of the segment
+
         :param desired_integral: target value of the segment integral
         """
         low, high = self.get_integral_range()
@@ -187,6 +191,7 @@ class EnvelopeSegment:
         """
         Split this segment into two EnvelopeSegment's without altering the curve shape and return them.
         This segment is altered in the process.
+
         :param t: where to split it (t is absolute time)
         :return: a tuple of this segment modified to be only the first part, and a new segment for the second part
         """
