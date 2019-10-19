@@ -350,28 +350,42 @@ class Envelope:
                         segment.end_level = level
                         segment.curve_shape = curve_shape_in
 
-    def insert_interpolated(self, t):
+    def insert_interpolated(self, t, min_difference=1e-7):
         """
-        Insert another curve point at the given time, without changing the shape of the curve
+        Insert another curve point at the given time, without changing the shape of the curve. A point only gets added
+        if it's at least min_difference from all existing control points.
+
+        :param t: the point at which to insert the point
+        :param min_difference: the minimum difference that this point has to be from an existing point on the curve
+            in order for a new point to be added.
+        :return the t value at which we interpolated. If we try to insert within min_difference of an existing control
+            point, then no new point is added, and we return the t of the nearest control point.
         """
         if t < self.start_time():
             # we set tolerance to -1 here to ensure that the initial segement doesn't simply get extended
             # we actually want an extra control point, redundant or not
             self.prepend_segment(self.start_level(), self.start_time() - t, tolerance=-1)
-            return
+            return t
         if t > self.end_time():
             # tolerance set to -1 for same reason as above
             self.append_segment(self.end_level(), t - self.end_time(), tolerance=-1)
-            return
-        if t == self.start_time() or t == self.end_time():
-            return
+            return t
+        if abs(t - self.start_time()) < min_difference:
+            return self.start_time()
+        if abs(t - self.end_time()) < min_difference:
+            return self.end_time()
         for i, segment in enumerate(self.segments):
-            if t == segment.start_time:
-                return
             if t in segment:
                 # this is the case that matters; t is within one of the segments
+                # make sure that we're further than min_difference from either endpoint
+                if abs(t - segment.start_time) < min_difference:
+                    return segment.start_time
+                if abs(t - segment.end_time) < min_difference:
+                    return segment.end_time
+                # if not, then we split at this point
                 part1, part2 = segment.split_at(t)
                 self.segments.insert(i + 1, part2)
+                return t
 
     # ----------------------- Appending / removing segments --------------------------
 
