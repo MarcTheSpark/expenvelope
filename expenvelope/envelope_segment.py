@@ -180,7 +180,8 @@ class EnvelopeSegment:
         :param desired_integral: target value of the segment integral
         """
         low, high = self.get_integral_range()
-        assert low < desired_integral < high
+        if not low < desired_integral < high:
+            raise ValueError("Desired integral out of adjustable range.")
         if self.end_level > self.start_level:
             self._curve_shape = get_curvature_from_filled_amount((desired_integral - low) / (high - low))
         else:
