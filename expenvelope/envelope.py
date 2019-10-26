@@ -370,17 +370,17 @@ class Envelope:
             # tolerance set to -1 for same reason as above
             self.append_segment(self.end_level(), t - self.end_time(), tolerance=-1)
             return t
-        if abs(t - self.start_time()) < min_difference:
+        if abs(t - self.start_time()) <= min_difference:
             return self.start_time()
-        if abs(t - self.end_time()) < min_difference:
+        if abs(t - self.end_time()) <= min_difference:
             return self.end_time()
         for i, segment in enumerate(self.segments):
             if t in segment:
                 # this is the case that matters; t is within one of the segments
                 # make sure that we're further than min_difference from either endpoint
-                if abs(t - segment.start_time) < min_difference:
+                if abs(t - segment.start_time) <= min_difference:
                     return segment.start_time
-                if abs(t - segment.end_time) < min_difference:
+                if abs(t - segment.end_time) <= min_difference:
                     return segment.end_time
                 # if not, then we split at this point
                 part1, part2 = segment.split_at(t)
@@ -686,7 +686,7 @@ class Envelope:
             return to_split,
 
         # Okay, now we go ahead with a single split at time t
-        to_split.insert_interpolated(t)
+        to_split.insert_interpolated(t, 0)
         for i, segment in enumerate(to_split.segments):
             if segment.start_time == t:
                 second_half = cls(to_split.segments[i:])
