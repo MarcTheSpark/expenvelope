@@ -819,6 +819,8 @@ class Envelope:
         return Envelope([segment._reciprocal() for segment in self.segments])
 
     def __eq__(self, other):
+        if not isinstance(other, Envelope):
+            return False
         return all(this_segment == other_segment for this_segment, other_segment in zip(self.segments, other.segments))
 
     def __add__(self, other):
