@@ -701,7 +701,7 @@ class Envelope:
         else:
             return to_split, second_half.split_at(remaining_splits, change_original=True)
 
-    def to_json(self):
+    def _to_json(self):
         json_dict = {'levels': self.levels}
 
         if all(x == self.durations[0] for x in self.durations):
@@ -729,7 +729,7 @@ class Envelope:
 
     def save_to_json(self, file_path):
         with open(file_path, "w") as file:
-            json.dump(self.to_json(), file, sort_keys=True, indent=4)
+            json.dump(self._to_json(), file, sort_keys=True, indent=4)
 
     @classmethod
     def load_from_json(cls, file_path):
