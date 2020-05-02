@@ -1,18 +1,38 @@
-from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, \
-    get_curvature_from_filled_amount
+r"""
+Module containing the :class:`EnvelopeSegment` class. Every :class:`envelope.Envelope` object, under the hood, is made
+up of a list of :class:`EnvelopeSegment`\ s. :class:`EnvelopeSegment`\ s support arithmetic operations like addition,
+subtraction, multiplication, and division. They also support horizontal scaling and shifting.
+
+Note also that this is defining a function whose domain is a portion of the real number line, but whose range can
+actually be nearly anything, including, e.g., numpy arrays. All of the functionality, even integration, works for
+mappings onto other kinds of ranges.
+"""
+
+from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, \
+    _get_curvature_from_filled_amount
 import numbers
 import math
+from typing import Union, Tuple
 
 
 class EnvelopeSegment:
 
-    def __init__(self, start_time, end_time, start_level, end_level, curve_shape):
-        """
-        A segment of an envelope, with the ability to perform interpolation and integration
+    """
+    A segment of an envelope, with the ability to perform interpolation and integration.
 
-        :param curve_shape: 0 is linear, > 0 changes late, < 0 changes early, also, string expressions involving "exp"
-        can be given where "exp" stands for the shape that will produce constant proportional change per unit time.
-        """
+    :param start_time: the start time of the segment (where it is in the parent :class:`Envelope`)
+    :param end_time: the end time of the segment
+    :param start_level: the level of the envelope segment at the beginning. Note that a type has not been specified;
+        the only requirements are that the type should be consistent and respond to addition and multiplication.
+        This means, for instance, that numpy arrays could be used.
+    :param end_level: the level of the envelope segment at the end.
+    :param curve_shape: 0 is linear, > 0 changes late, < 0 changes early. Also, string expressions involving "exp"
+        can be given, where "exp" stands for the shape that will produce constant proportional change per unit time.
+    :ivar start_time: the start time of the segment
+    :ivar end_time: the end time of the segment
+    """
+
+    def __init__(self, start_time: float, end_time: float, start_level, end_level, curve_shape: Union[float, str]):
         # note that start_level, end_level, and curvature are properties, since we want
         # to recalculate the constants that we use internally if they are changed.
         self.start_time = start_time
@@ -36,7 +56,19 @@ class EnvelopeSegment:
         self._A = self._B = None
 
     @classmethod
-    def from_endpoints_and_halfway_level(cls, start_time, end_time, start_level, end_level, halfway_level):
+    def from_endpoints_and_halfway_level(cls, start_time: float, end_time: float,
+                                         start_level, end_level, halfway_level) -> __qualname__:
+        """
+        Construct an EnvelopeSegment with the given start/end times/levels, specifying curve shape indirectly through
+        the desired halfway level.
+
+        :param start_time: the start time of the segment (where it is in the parent :class:`Envelope`)
+        :param end_time: the end time of the segment
+        :param start_level: the level of the envelope segment at the beginning. (See documentation for
+            :class:`EnvelopeSegment`)
+        :param end_level: the level of the envelope segment at the end.
+        :param halfway_level: The level we want to reach halfway through the segment.
+        """
         curve_shape = _curve_shape_from_start_mid_and_end_levels(start_level, halfway_level, end_level)
         return cls(start_time, end_time, start_level, end_level, curve_shape)
 
@@ -52,6 +84,10 @@ class EnvelopeSegment:
 
     @property
     def start_level(self):
+        """
+        The start level of this segment. (Can take a wide variety of types; see documentation for
+        :class:`EnvelopeSegment`)
+        """
         return self._start_level
 
     @start_level.setter
@@ -61,6 +97,10 @@ class EnvelopeSegment:
 
     @property
     def end_level(self):
+        """
+        The end level of this segment. (Can take a wide variety of types; see documentation for
+        :class:`EnvelopeSegment`)
+        """
         return self._end_level
 
     @end_level.setter
@@ -69,7 +109,10 @@ class EnvelopeSegment:
         self._calculate_coefficients()
 
     @property
-    def curve_shape(self):
+    def curve_shape(self) -> float:
+        """
+        The curve shape of this segment. (See documentation for :class:`EnvelopeSegment`)
+        """
         return self._curve_shape
 
     @curve_shape.setter
@@ -78,22 +121,31 @@ class EnvelopeSegment:
         self._calculate_coefficients()
 
     @property
-    def duration(self):
+    def duration(self) -> float:
+        """
+        Duration of this segment.
+        """
         return self.end_time - self.start_time
 
     def max_level(self):
+        """
+        Get the maximum level achieved in this segment
+        """
         return max(self.start_level, self.end_level)
 
     def average_level(self):
+        """
+        Get the average level achieved in this segment
+        """
         return self.integrate_segment(self.start_time, self.end_time) / self.duration
 
     def max_absolute_slope(self):
         """
         Get the max absolute value of the slope of this segment over the interval.
-        Since the slope of e^x is e^x, the max slope of e^x in the interval of [0, S] is e^S. If S is negative, the
+        (Since the slope of e^x is e^x, the max slope of e^x in the interval of [0, S] is e^S. If S is negative, the
         curve has exactly the same slopes, but in reverse (still need to think about why), so that's why the max slope
         term ends up being e^abs(S). We then have to scale that by the average slope over our interval divided by
-        the average slope of e^x over [0, S] to get the true, scaled average slope. Hence the other scaling terms.
+        the average slope of e^x over [0, S] to get the true, scaled average slope. Hence the other scaling terms.)
         """
         if self.duration == 0:
             # a duration of zero means we have an immediate change of value. Since this function is used primarily
@@ -106,14 +158,18 @@ class EnvelopeSegment:
         return math.exp(abs(self._curve_shape)) * abs(self._end_level - self._start_level) / self.duration * \
                abs(self._curve_shape) / (math.exp(abs(self._curve_shape)) - 1)
 
-    def value_at(self, t, clip_at_boundary=True):
+    def value_at(self, t: float, clip_at_boundary: bool = True):
         """
-        Get interpolated value of the curve at time t
+        Get interpolated value of the curve at time t.
         The equation here is y(t) = y1 + (y2 - y1) / (e^S - 1) * (e^(S*t) - 1)
         (y1=starting rate, y2=final rate, t=progress along the curve 0 to 1, S=curve_shape)
         Essentially it's an appropriately scaled and stretched segment of e^x with x in the range [0, S]
         as S approaches zero, we get a linear segment, and S of ln(y2/y1) represents normal exponential interpolation
-        large values of S correspond to last-minute change, and negative values of S represent early change
+        large values of S correspond to last-minute change, and negative values of S represent early change.
+
+        :param t: time at which to evaluate the level (relative to the time zero, not to the start time of this segment)
+        :param clip_at_boundary: if True, any t outside the boundary gets evaluated based on the start or end level
+            (whichever is applicable.
         """
         if self._A is None:
             self._calculate_coefficients()
@@ -173,7 +229,7 @@ class EnvelopeSegment:
         return self.duration * min(self.start_level, self.end_level), \
                self.duration * max(self.start_level, self.end_level)
 
-    def set_curvature_to_desired_integral(self, desired_integral):
+    def set_curvature_to_desired_integral(self, desired_integral) -> None:
         """
         Changes the curvature of this segment so as to hit a desired target for the integral of the segment
 
@@ -183,12 +239,12 @@ class EnvelopeSegment:
         if not low < desired_integral < high:
             raise ValueError("Desired integral out of adjustable range.")
         if self.end_level > self.start_level:
-            self._curve_shape = get_curvature_from_filled_amount((desired_integral - low) / (high - low))
+            self._curve_shape = _get_curvature_from_filled_amount((desired_integral - low) / (high - low))
         else:
-            self._curve_shape = get_curvature_from_filled_amount(1 - (desired_integral - low) / (high - low))
+            self._curve_shape = _get_curvature_from_filled_amount(1 - (desired_integral - low) / (high - low))
         self._calculate_coefficients()
 
-    def split_at(self, t):
+    def split_at(self, t: float) -> Tuple[__qualname__, __qualname__]:
         """
         Split this segment into two EnvelopeSegment's without altering the curve shape and return them.
         This segment is altered in the process.
@@ -209,55 +265,90 @@ class EnvelopeSegment:
         self._calculate_coefficients()
         return self, new_segment
 
-    def clone(self):
+    def clone(self) -> __qualname__:
+        """
+        Make a duplicate of this segment.
+        """
         return EnvelopeSegment(self.start_time, self.end_time, self.start_level, self.end_level, self.curve_shape)
 
-    def shift_vertical(self, amount):
-        assert isinstance(amount, numbers.Number)
+    def shift_vertical(self, amount) -> __qualname__:
+        """
+        Shifts the output of this segment by the specified amount.
+
+        :param amount: the amount to shift up and down by
+        :return: self, for chaining purposes
+        """
         self._start_level += amount
         self._end_level += amount
         self._calculate_coefficients()
         return self
 
-    def scale_vertical(self, amount):
-        assert isinstance(amount, numbers.Number)
+    def scale_vertical(self, amount) -> __qualname__:
+        """
+        Scales the output of this segment by the specified amount.
+
+        :param amount: amount to scale output by
+        :return: self, for chaining purposes
+        """
         self._start_level *= amount
         self._end_level *= amount
         self._calculate_coefficients()
         return self
 
-    def shift_horizontal(self, amount):
+    def shift_horizontal(self, amount: float) -> __qualname__:
+        """
+        Shifts the domain of this segment by the specified amount.
+
+        :param amount: the amount to shift the domain by
+        :return: self, for chaining purposes
+        """
         assert isinstance(amount, numbers.Number)
         self.start_time += amount
         self.end_time += amount
         return self
 
-    def scale_horizontal(self, amount):
-        assert isinstance(amount, numbers.Number)
+    def scale_horizontal(self, amount: float) -> __qualname__:
+        """
+        Scales the domain of this segment by the specified amount.
+
+        :param amount: amount to scale domain by
+        :return: self, for chaining purposes
+        """
         self.start_time *= amount
         self.end_time *= amount
         return self
 
-    def is_shifted_version_of(self, other, tolerance=1e-10):
-        assert isinstance(other, EnvelopeSegment)
+    def is_shifted_version_of(self, other: __qualname__, tolerance: float = 1e-10) -> bool:
+        """
+        Determines if this segment is simply a shifted version of another segment
+
+        :param other: another EnvelopeSegment
+        :param tolerance: how close it needs to be to count as the same
+        """
         return abs(self.start_time - other.start_time) < tolerance and \
                abs(self.end_time - other.end_time) < tolerance and \
                ((self._start_level - other._start_level) - (self._end_level - other._end_level)) < tolerance and \
                (self._curve_shape - other._curve_shape) < tolerance
 
-    def get_graphable_point_pairs(self, resolution=25, endpoint=True):
+    def _get_graphable_point_pairs(self, resolution: int = 25, endpoint: bool = True):
         x_values = [self.start_time + x / resolution * self.duration
                     for x in range(resolution + 1 if endpoint else resolution)]
         y_values = [self.value_at(x) for x in x_values]
         return x_values, y_values
 
-    def show_plot(self, title=None, resolution=25):
+    def show_plot(self, title: str = None, resolution: int = 25) -> None:
+        """
+        Uses matplotlib to display a graph of this EnvelopeSegment.
+
+        :param title: (optional) the title to give the graph
+        :param resolution: how many points to use in creating the graph
+        """
         try:
             import matplotlib.pyplot as plt
         except ImportError:
             raise ImportError("Could not find matplotlib, which is needed for plotting.")
         fig, ax = plt.subplots()
-        ax.plot(*self.get_graphable_point_pairs(resolution))
+        ax.plot(*self._get_graphable_point_pairs(resolution))
         ax.set_title('Graph of Envelope Segment' if title is None else title)
         plt.show()
 

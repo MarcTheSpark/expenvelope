@@ -1,11 +1,12 @@
 from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
 from .envelope_segment import *
+from .utilities import SavesToJson
 from copy import deepcopy
 import numbers
 import json
 
 
-class Envelope:
+class Envelope(SavesToJSON):
 
     def __init__(self, segments=None):
         """
@@ -718,7 +719,7 @@ class Envelope:
         return json_dict
 
     @classmethod
-    def from_json(cls, json_dict):
+    def _from_json(cls, json_dict):
         curve_shapes = None if 'curve_shapes' not in json_dict else json_dict['curve_shapes']
         offset = 0 if 'offset' not in json_dict else json_dict['offset']
         if 'length' in json_dict:
@@ -726,15 +727,6 @@ class Envelope:
         else:
             return cls.from_levels_and_durations(json_dict['levels'], json_dict['durations'],
                                                  curve_shapes, offset)
-
-    def save_to_json(self, file_path):
-        with open(file_path, "w") as file:
-            json.dump(self._to_json(), file, sort_keys=True, indent=4)
-
-    @classmethod
-    def load_from_json(cls, file_path):
-        with open(file_path, "r") as file:
-            return cls.from_json(json.load(file))
 
     def is_shifted_version_of(self, other):
         assert isinstance(other, Envelope)
