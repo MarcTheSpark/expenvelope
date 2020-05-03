@@ -1,36 +1,51 @@
-from .utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
+r"""
+Module containing the central :class:`Envelope` class, which represents a piece-wise exponential function.
+:class:`Envelope`\ s support arithmetic operations like addition, subtraction, multiplication, and division. They
+also support horizontal scaling and shifting.
+
+Note also that this is defining a function whose domain is a portion of the real number line, but whose range can
+actually be nearly anything, including, e.g., numpy arrays. All of the functionality, even integration, works for
+mappings onto other kinds of ranges.
+"""
+
+from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, SavesToJSON
 from .envelope_segment import *
-from .utilities import SavesToJson
-from copy import deepcopy
 import numbers
-import json
+from typing import Sequence, Union, Callable, Tuple, TypeVar
+
+
+T = TypeVar('T', bound='Envelope')
 
 
 class Envelope(SavesToJSON):
 
-    def __init__(self, segments=None):
-        """
-        Implements an envelope using exponential curve segments. Initialization happens outside
-        of the constructor for smoother subclassing; this way all of the class methods work correctly
-        on derived classes like TempoEnvelope.
-        """
+    r"""
+    Class representing a piece-wise exponential function. This class was designed with musical applications in mind,
+    with the intention being to represent a continuously changing musical parameter over time. For instance, an
+    Envelope might be used to represent the pitch curve of a glissando, or the volume curve of a forte-piano.
+
+    Note that generally Envelopes are not constructed directly, but instead by calling one of the class methods,
+    such as :func:`Envelope.from_levels_and_durations`.
+
+    :param segments: A list of :class:`envelope_segment.EnvelopeSegment`\ s to initialize the envelope with
+    :ivar segments: list of :class:`envelope_segment.EnvelopeSegment`\ s representing the pieces of this envelope
+    """
+
+    def __init__(self, segments: Sequence[EnvelopeSegment] = None):
+
         if segments is None:
+            # Initialization happens outside of the constructor for smoother subclassing; this way all of the class
+            # methods work correctly on derived classes like TempoEnvelope.
             self.segments = None
-            self.initialize()
+            self._initialize()
         else:
             self.segments = list(segments)
             assert all(isinstance(x, EnvelopeSegment) for x in self.segments)
 
-    def initialize(self, levels=(0, 0), durations=(0,), curve_shapes=None, offset=0):
+    def _initialize(self, levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
+                    curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0) -> T:
         """
-        A curve shape of zero is linear, > 0 changes late, and < 0 changes early. Strings containing "exp" will also be
-        evaluated, with "exp" standing for the shape that will produce constant proportional change per unit time.
-
-        :param levels: at least 1 level should be given (if only one level is given, it is automatically doubled so as
-        to be the start and end level of the one segment of the curve)
-        :param durations: there should be one fewer duration than level given
-        :param curve_shapes: there should be one fewer than the number of levels. If None, all segments are linear
-        :param offset: starts Envelope from somewhere other than zero
+        Validates the lengths of levels, durations, and curve_shapes, and constructs the list of EnvelopeSegments.
         """
         if not hasattr(levels, "__len__"):
             levels = (levels,)
@@ -47,7 +62,8 @@ class Envelope(SavesToJSON):
         return self
 
     @staticmethod
-    def _construct_segments_list(levels, durations, curve_shapes, offset=0):
+    def _construct_segments_list( levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
+                                  curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0):
         segments = []
         t = offset
         for i in range(len(levels) - 1):
@@ -58,22 +74,32 @@ class Envelope(SavesToJSON):
     # ---------------------------- Class methods --------------------------------
 
     @classmethod
-    def from_levels_and_durations(cls, levels=(0, 0), durations=(0,), curve_shapes=None, offset=0):
+    def from_levels_and_durations(cls, levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
+                                  curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0) -> T:
         """
-        Construct an envelope from levels, durations, and optionally curve shapes
-        :param levels: the levels of the curve
-        :param durations: the durations of the curve
-        :param curve_shapes: the curve shape values (optional)
+        Construct an Envelope from levels, durations, and optionally curve shapes.
+
+        :param levels: the levels of the curve. These can be anything that acts like a number. For instance, one could
+            even use numpy arrays as levels.
+        :param durations: the durations of the curve segments. (Should have length one less than levels.)
+        :param curve_shapes: the curve shape values (optional, should have length one less than levels). Generally these 
+            will be floats, with the default of 0 representing linear change, > 0 representing late change, and < 0 
+            representing early change. It is also possible to use the string "exp" to produce constant proportional
+            change per unit time, so long as the segment does not touch zero. Finally, strings containing "exp", such 
+            as "exp ** 2 / 5" will be evaluated with the curve shape required for exponential change being plugged 
+            in for the variable "exp".
         :param offset: starts curve from somewhere other than zero
         :return: an Envelope constructed accordingly
         """
-        return cls().initialize(levels, durations, curve_shapes, offset)
+        return cls()._initialize(levels, durations, curve_shapes, offset)
 
     @classmethod
-    def from_levels(cls, levels, length=1.0, offset=0):
+    def from_levels(cls, levels: Sequence, length: float = 1.0, offset: float = 0) -> T:
         """
-        Construct an envelope from levels alone, normalized to the given length
-        :param levels: the levels of the curve
+        Construct an envelope from levels alone, normalized to the given length.
+        
+        :param levels: the levels of the curve. These can be anything that acts like a number. For instance, one could
+            even use numpy arrays as levels.
         :param length: the total length of the curve, divided evenly amongst the levels
         :param offset: starts curve from somewhere other than zero
         :return: an Envelope constructed accordingly
@@ -87,16 +113,17 @@ class Envelope(SavesToJSON):
         return cls.from_levels_and_durations(levels, durations, curves, offset)
 
     @classmethod
-    def from_list(cls, constructor_list):
+    def from_list(cls, constructor_list: Sequence) -> T:
         """
         Construct an envelope from a list that can take a number of formats
-        :param constructor_list: either a flat list that just contains levels, or a list of lists either of the form
-         [levels_list, total_duration], [levels_list, durations_list] or [levels_list, durations_list, curve_shape_list]
-         for example:
-         - an input of [1, 0.5, 0.3] is interpreted as evenly spaced levels with a total duration of 1
-         - an input of [[1, 0.5, 0.3], 3.0] is interpreted as levels and durations with a total duration of e.g. 3.0
-         - an input of [[1, 0.5, 0.3], [0.2, 0.8]] is interpreted as levels and durations
-         - an input of [[1, 0.5, 0.3], [0.2, 0.8], [2, 0.5]] is interpreted as levels, durations, and curvatures
+        
+        :param constructor_list: Either a flat list that just contains levels, or a list of lists either of the form
+            [levels_list, total_duration], [levels_list, durations_list] or [levels_list, durations_list,
+            curve_shape_list] for example:
+             - an input of [1, 0.5, 0.3] is interpreted as evenly spaced levels with a total duration of 1
+             - an input of [[1, 0.5, 0.3], 3.0] is interpreted as levels and durations with a total duration of e.g. 3.0
+             - an input of [[1, 0.5, 0.3], [0.2, 0.8]] is interpreted as levels and durations
+             - an input of [[1, 0.5, 0.3], [0.2, 0.8], [2, 0.5]] is interpreted as levels, durations, and curvatures
         :return: an Envelope constructed accordingly
         """
         assert hasattr(constructor_list, "__len__")
@@ -118,11 +145,12 @@ class Envelope(SavesToJSON):
             return cls.from_levels(constructor_list)
 
     @classmethod
-    def from_points(cls, *points):
+    def from_points(cls, *points: Sequence) -> T:
         """
-        Construct an envelope from points, each of which is of the form (time, value) or (time, value, curve_shape)
-        :param points: list of points
-        :return an Envelope constructed accordingly
+        Construct an envelope from points
+        
+        :param points: list of points, each of which is of the form (time, value) or (time, value, curve_shape)
+        :return: an Envelope constructed accordingly
         """
         assert all(len(point) >= 2 for point in points)
         points = tuple(sorted(points, key=lambda point: point[0]))
@@ -135,26 +163,32 @@ class Envelope(SavesToJSON):
                                              curve_shapes=curve_shapes, offset=points[0][0])
 
     @classmethod
-    def release(cls, duration, start_level=1, curve_shape=None):
+    def release(cls, duration: float, start_level=1, curve_shape: Union[float, str] = None) -> T:
         """
         Construct an simple decaying envelope
+        
         :param duration: total decay length
         :param start_level: level decayed from
-        :param curve_shape: shape of the curve
+        :param curve_shape: shape of the curve (see documentation for :func:`Envelope.from_levels_and_durations`)
         :return: an Envelope constructed accordingly
         """
         curve_shapes = (curve_shape,) if curve_shape is not None else None
         return cls.from_levels_and_durations((start_level, 0), (duration,), curve_shapes=curve_shapes)
 
     @classmethod
-    def ar(cls, attack_length, release_length, peak_level=1, attack_shape=None, release_shape=None):
+    def ar(cls, attack_length: float, release_length: float, peak_level=1,
+            attack_shape: Union[float, str] = None, release_shape: Union[float, str] = None) -> T:
         """
         Construct an attack/release envelope
+
         :param attack_length: rise time
         :param release_length: release time
-        :param peak_level: level reached after attack and before release
-        :param attack_shape: sets curve shape for attack portion of the curve
-        :param release_shape: sets curve shape for release portion of the curve
+        :param peak_level: level reached after attack and before release (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
+        :param attack_shape: sets curve shape for attack portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
+        :param release_shape: sets curve shape for release portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
         :return: an Envelope constructed accordingly
        """
         curve_shapes = None if attack_shape is release_shape is None else \
@@ -163,15 +197,19 @@ class Envelope(SavesToJSON):
                                              curve_shapes=curve_shapes)
 
     @classmethod
-    def asr(cls, attack_length, sustain_level, sustain_length, release_length, attack_shape=None, release_shape=None):
+    def asr(cls, attack_length: float, sustain_level, sustain_length: float, release_length: float,
+            attack_shape: Union[float, str] = None, release_shape: Union[float, str] = None) -> T:
         """
         Construct an attack/sustain/release envelope
+
         :param attack_length: rise time
         :param sustain_level: sustain level reached after attack and before release
         :param sustain_length: length of sustain portion of curve
         :param release_length: release time
-        :param attack_shape: sets curve shape for attack portion of the curve
-        :param release_shape: sets curve shape for release portion of the curve
+        :param attack_shape: sets curve shape for attack portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
+        :param release_shape: sets curve shape for release portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
         :return: an Envelope constructed accordingly
        """
         curve_shapes = None if attack_shape is release_shape is None else \
@@ -181,19 +219,24 @@ class Envelope(SavesToJSON):
                                              curve_shapes=curve_shapes)
 
     @classmethod
-    def adsr(cls, attack_length, attack_level, decay_length, sustain_level, sustain_length, release_length,
-             attack_shape=None, decay_shape=None, release_shape=None):
+    def adsr(cls, attack_length: float, attack_level, decay_length: float, sustain_level, sustain_length: float,
+             release_length: float, attack_shape: Union[float, str] = None, decay_shape: Union[float, str] = None,
+             release_shape: Union[float, str] = None) -> T:
         """
         Construct a standard attack/decay/sustain/release envelope
+
         :param attack_length: rise time
         :param attack_level: level reached after attack before decay
         :param decay_length: length of decay portion of the curve
         :param sustain_level: sustain level reached after decay and before release
         :param sustain_length: length of sustain portion of curve
         :param release_length: release time
-        :param attack_shape: sets curve shape for attack portion of the curve
-        :param decay_shape: sets curve shape for decay portion of the curve
-        :param release_shape: sets curve shape for release portion of the curve
+        :param attack_shape: sets curve shape for attack portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
+        :param decay_shape: sets curve shape for decay portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
+        :param release_shape: sets curve shape for release portion of the curve (see documentation for
+            :func:`Envelope.from_levels_and_durations`)
         :return: an Envelope constructed accordingly
        """
         curve_shapes = None if attack_shape is decay_shape is release_shape is None else \
@@ -204,39 +247,69 @@ class Envelope(SavesToJSON):
                                              curve_shapes=curve_shapes)
 
     @classmethod
-    def from_function(cls, function, domain_start=0, domain_end=1, resolution_multiple=2,
-                      key_point_precision=100, key_point_iterations=5):
+    def from_function(cls, function: Callable[[float], float], domain_start: float = 0, domain_end: float = 1,
+                      resolution_multiple: int = 2, key_point_precision: int = 100,
+                      key_point_iterations: int = 5) -> T:
         """
-        Approximation of arbitrary function as an envelope of exponential segments.
-        By default, the function is split at local extrema and inflection points found through a pretty
-        unsophisticated numerical process. The precision of this numerical process is set through the
-        key_point_precision and key_point_iterations arguments. If resolution_multiple is set greater than 1
-        then extra key points are added in between those key points to improve curve fit.
-        :return: an Envelope
+        Constructs an Envelope that approximates an arbitrary function. By default, the function is split at local
+        extrema and inflection points found through a pretty unsophisticated numerical process.
+
+        :param function: a function from time to level (often a lambda function)
+        :param domain_start: the beginning of the function domain range to capture
+        :param domain_end: the end of the function domain range to capture
+        :param resolution_multiple: factor by which we add extra key points between the extrema and inflection points
+            to improve the curve fit..
+        :param key_point_precision: precision with which we break up the domain of the function in searching for key
+            points (how many discrete differences we use).
+        :param key_point_iterations: every time a prospective key point is found, we run a more narrow search on that
+            segment of the domain, using smaller step sizes, which gives us a more precise location for the key point.
+            We then repeat this narrowing in process, up to this many iterations
+        :return: an Envelope constructed accordingly
         """
         return cls(_make_envelope_segments_from_function(function, domain_start, domain_end, resolution_multiple,
                                                          key_point_precision, key_point_iterations))
 
     # ---------------------------- Various Properties --------------------------------
 
-    def length(self):
+    def length(self) -> float:
+        """
+        The length of the domain on which this Envelope is defined (end time minus start time).
+        """
         if len(self.segments) == 0:
             return 0
         return self.segments[-1].end_time - self.segments[0].start_time
 
-    def start_time(self):
+    def start_time(self) -> float:
+        """
+        Beginning of the domain on which this Envelope is defined.
+        """
         return self.offset
 
-    def end_time(self):
+    def end_time(self) -> float:
+        """
+        End of the domain on which this Envelope is defined.
+        """
         return self.segments[-1].end_time
 
     def start_level(self):
+        """
+        Beginning value of the Envelope
+        """
         return self.segments[0].start_level
 
     def end_level(self):
+        """
+        Ending value of the Envelope
+        """
         return self.segments[-1].end_level
 
-    def max_level(self, t_range=None):
+    def max_level(self, t_range: Tuple[float, float] = None):
+        """
+        Returns the highest value that the Envelope takes over the given range.
+
+        :param t_range: tuple defining the start and end time of the interval to check. If None, return the max level
+            reached over the entire Envelope.
+        """
         if t_range is None:
             # checking over the entire range, so that's easy
             return max(segment.max_level() for segment in self.segments)
@@ -255,30 +328,59 @@ class Envelope(SavesToJSON):
                     break
             return max(points_to_check)
 
-    def average_level(self):
-        return self.integrate_interval(self.start_time(), self.start_time() + self.length()) / self.length()
+    def average_level(self, t_range: Tuple[float, float] = None):
+        """
+        Returns the average value that the Envelope takes over the given range.
+
+        :param t_range: tuple defining the start and end time of the interval to check. If None, return the average
+            level reached over the entire Envelope.
+        """
+        if t_range is None:
+            t_range = self.start_time(), self.start_time() + self.length()
+            interval_length = self.length()
+        else:
+            interval_length = t_range[1] - t_range[0]
+        return self.integrate_interval(*t_range) / interval_length
 
     def max_absolute_slope(self):
+        """
+        Returns the maximum absolute value of the slope over the entire Envelope.
+        """
         return max(segment.max_absolute_slope() for segment in self.segments)
 
     @property
-    def levels(self):
+    def levels(self) -> Sequence:
+        """
+        Tuple of levels at all segment boundary points.
+        """
         return tuple(segment.start_level for segment in self.segments) + (self.end_level(),)
 
     @property
-    def durations(self):
+    def durations(self) -> Sequence[float]:
+        """
+        Tuple of all the segment lengths.
+        """
         return tuple(segment.duration for segment in self.segments)
 
     @property
-    def times(self):
+    def times(self) -> Sequence[float]:
+        """
+        Tuple of all the segment start times.
+        """
         return tuple(segment.start_time for segment in self.segments) + (self.end_time(),)
 
     @property
-    def curve_shapes(self):
+    def curve_shapes(self) -> Sequence[Union[float, str]]:
+        """
+        Tuple of all the segment curve shapes.
+        """
         return tuple(segment.curve_shape for segment in self.segments)
 
     @property
-    def offset(self):
+    def offset(self) -> float:
+        """
+        Alias for :func:`Envelope.start_time`.
+        """
         return self.segments[0].start_time
 
     # ----------------------- Insertion of new control points --------------------------
@@ -318,9 +420,15 @@ class Envelope(SavesToJSON):
                     # test index is too low, so don't look any lower
                     lo_index = test_index
 
-    def insert(self, t, level, curve_shape_in=0, curve_shape_out=0):
+    def insert(self, t, level, curve_shape_in=0, curve_shape_out=0) -> None:
         """
-        Insert a curve point at time t, and set the shape of the curve into and out of it
+        Insert a curve point at time t, and set the shape of the curve into and out of it. This essentially divides
+        the segment at that point in two.
+
+        :param t: The time at which to add a point
+        :param level: The level of the new point we are adding
+        :param curve_shape_in: the curve shape of the new segment going into the point we are adding
+        :param curve_shape_out: the curve shape of the new segment going out of the point we are adding
         """
         if t < self.start_time():
             self.prepend_segment(level, self.start_time() - t, curve_shape_out)
@@ -351,7 +459,7 @@ class Envelope(SavesToJSON):
                         segment.end_level = level
                         segment.curve_shape = curve_shape_in
 
-    def insert_interpolated(self, t, min_difference=1e-7):
+    def insert_interpolated(self, t: float, min_difference: float = 1e-7) -> float:
         """
         Insert another curve point at the given time, without changing the shape of the curve. A point only gets added
         if it's at least min_difference from all existing control points.
@@ -390,17 +498,19 @@ class Envelope(SavesToJSON):
 
     # ----------------------- Appending / removing segments --------------------------
 
-    def append_segment(self, level, duration, curve_shape=None, tolerance=0, halfway_level=None):
+    def append_segment(self, level, duration: float, curve_shape: float = None, tolerance: float = 0,
+                       halfway_level=None) -> None:
         """
         Append a segment to the end of the curve ending at level and lasting for duration.
         If we're adding a linear segment to a linear segment, then we extend the last linear segment
         instead of adding a new one if the level is within tolerance of where the last one was headed
+        
         :param level: the level we're going to
         :param duration: the duration of the new segment
         :param curve_shape: defaults to 0 (linear)
         :param tolerance: tolerance for extending a linear segment rather than adding a new one
         :param halfway_level: alternate way of defining the curve shape. If this is set and the curve shape is
-        not then we use this to determine the curve shape.
+            not then we use this to determine the curve shape.
         """
         curve_shape = curve_shape if curve_shape is not None \
             else _curve_shape_from_start_mid_and_end_levels(self.end_level(), halfway_level, level) \
@@ -433,13 +543,23 @@ class Envelope(SavesToJSON):
             self.segments.append(EnvelopeSegment(self.end_time(), self.end_time() + duration,
                                                  self.end_level(), level, curve_shape))
 
-    def prepend_segment(self, level, duration, curve_shape=0.0, tolerance=0):
+    def prepend_segment(self, level, duration: float, curve_shape: float = None, tolerance: float = 0,
+                        halfway_level=None) -> None:
         """
         Prepend a segment to the beginning of the curve, starting at level and lasting for duration.
         If we're adding a linear segment to a linear segment, then we extend the last linear segment
         instead of adding a new one if the level is within tolerance of where the last one was headed
-        :return:
+
+        :param level: the level that the prepended segment starts at
+        :param duration: the duration of the new segment
+        :param curve_shape: defaults to 0 (linear)
+        :param tolerance: tolerance for extending a linear segment rather than adding a new one
+        :param halfway_level: alternate way of defining the curve shape. If this is set and the curve shape is
+            not then we use this to determine the curve shape.
         """
+        curve_shape = curve_shape if curve_shape is not None \
+            else _curve_shape_from_start_mid_and_end_levels(self.end_level(), halfway_level, level) \
+            if halfway_level is not None else 0
         if self.segments[0].duration == 0:
             # the first segment has no length. Are we also prepending a segment with no length?
             if duration == 0:
@@ -468,7 +588,11 @@ class Envelope(SavesToJSON):
             self.segments.insert(0, EnvelopeSegment(self.start_time() - duration, self.start_time(),
                                                     level, self.start_level(), curve_shape))
 
-    def pop_segment(self):
+    def pop_segment(self) -> Union[EnvelopeSegment, None]:
+        """
+        Remove and return the last segment of this Envelope.
+        If there is only one segment, reduce it to length zero and return None.
+        """
         if len(self.segments) == 1:
             if self.segments[0].end_time != self.segments[0].start_time or \
                     self.segments[0].end_level != self.segments[0].start_level:
@@ -479,7 +603,11 @@ class Envelope(SavesToJSON):
                 raise IndexError("Cannot pop from empty Envelope")
         return self.segments.pop()
 
-    def pop_segment_from_start(self):
+    def pop_segment_from_start(self) -> Union[EnvelopeSegment, None]:
+        """
+        Remove and return the first segment of this Envelope.
+        If there is only one segment, reduce it to length zero and return None.
+        """
         if len(self.segments) == 1:
             if self.segments[0].end_time != self.segments[0].start_time or \
                     self.segments[0].end_level != self.segments[0].start_level:
@@ -490,7 +618,12 @@ class Envelope(SavesToJSON):
                 raise IndexError("Cannot pop from empty Envelope")
         return self.segments.pop(0)
 
-    def remove_segments_after(self, t):
+    def remove_segments_after(self, t: float) -> None:
+        """
+        Removes all segments after the given time (including a partial segment if t lands in the middle of a segment).
+
+        :param t: the point at which this Envelope is to be truncated.
+        """
         if t < self.start_time():
             while True:
                 try:
@@ -508,7 +641,12 @@ class Envelope(SavesToJSON):
                     self.pop_segment()
                 return
 
-    def remove_segments_before(self, t):
+    def remove_segments_before(self, t: float) -> None:
+        """
+        Removes all segments before the given time (including a partial segment if t lands in the middle of a segment).
+
+        :param t: the point at which this Envelope is to be truncated.
+        """
         if t > self.end_time():
             while True:
                 try:
@@ -526,9 +664,9 @@ class Envelope(SavesToJSON):
                     self.pop_segment_from_start()
                 return
 
-    def append_envelope(self, envelope_to_append: 'Envelope'):
+    def append_envelope(self, envelope_to_append: T) -> __qualname__:
         """
-        Extends this envelope by another one (shifted to start at the end of this one.
+        Extends this envelope by another one (shifted to start at the end of this one).
         """
         if self.end_level() != envelope_to_append.start_level():
             self.append_segment(envelope_to_append.start_level(), 0)
@@ -536,9 +674,9 @@ class Envelope(SavesToJSON):
             self.append_segment(segment.end_level, segment.duration, segment.curve_shape)
         return self
 
-    def prepend_envelope(self, envelope_to_prepend: 'Envelope'):
+    def prepend_envelope(self, envelope_to_prepend: T) -> T:
         """
-        Same as above, but prepending a segment.
+        Extends this envelope backwards by another one (shifted to end at the start of this one).
         """
         if self.start_level() != envelope_to_prepend.end_level():
             self.prepend_segment(envelope_to_prepend.end_level(), 0)
@@ -548,13 +686,14 @@ class Envelope(SavesToJSON):
 
     # ------------------------ Interpolation, Integration --------------------------
 
-    def value_at(self, t, from_left=False):
+    def value_at(self, t: float, from_left: bool = False):
         """
-        The most important method for an Envelope: what's it's value at a given time
+        Get the value of this Envelope at the given time.
+
         :param t: the time
         :param from_left: if true, get the limit as we approach t from the left. In the case of a zero-length segment,
-        which suddenly changes the value, this tells us what the value was right before the jump.
-        :return: the value of this Envelope at t
+            which suddenly changes the value, this tells us what the value was right before the jump instead of right
+            after the jump.
         """
         if t < self.start_time():
             return self.start_level()
@@ -563,7 +702,13 @@ class Envelope(SavesToJSON):
 
         return self.segments[containing_segment_index].value_at(t)
 
-    def integrate_interval(self, t1, t2):
+    def integrate_interval(self, t1: float, t2: float):
+        """
+        Get the definite integral under this Envelope from t1 to t2
+
+        :param t1: lower bound of integration
+        :param t2: upper bound of integration
+        """
         if t1 == t2:
             return 0
         if t2 < t1:
@@ -597,7 +742,15 @@ class Envelope(SavesToJSON):
                     integral += segment.integrate_segment(t1, segment.end_time)
         return integral
 
-    def get_upper_integration_bound(self, t1, desired_area, max_error=0.001):
+    def get_upper_integration_bound(self, t1: float, desired_area: float, max_error: float = 0.001) -> float:
+        """
+        Given a lower integration bound, find the upper bound that will result in the desired integral
+
+        :param t1: lower bound of integration
+        :param desired_area: desired value of the integral.
+        :param max_error: the upper bound is found through a process of successive approximation; once we get within
+            this error, the approximation is considered good enough.
+        """
         if desired_area < max_error:
             return t1
         t1_level = self.value_at(t1)
@@ -620,8 +773,14 @@ class Envelope(SavesToJSON):
 
     # -------------------------------- Utilities --------------------------------
 
-    def normalize_to_duration(self, desired_duration, in_place=True):
-        out = self if in_place else deepcopy(self)
+    def normalize_to_duration(self, desired_duration: float, in_place: bool = True) -> T:
+        """
+        Stretch or squeeze the segments of this Envelope so that it has the desired total duration.
+
+        :param desired_duration: the desired new duration of the Envelope
+        :param in_place: if True, modifies this Envelope in place; if False, makes a copy first
+        """
+        out = self if in_place else self.duplicate()
         if self.length() != desired_duration:
             ratio = desired_duration / self.length()
             for segment in out.segments:
@@ -629,9 +788,11 @@ class Envelope(SavesToJSON):
                 segment.end_time = (segment.end_time - self.start_time()) * ratio + self.start_time()
         return out
 
-    def local_extrema(self, include_saddle_points=False):
+    def local_extrema(self, include_saddle_points: bool = False) -> Sequence[float]:
         """
         Returns a list of the times where the curve changes direction.
+
+        :param include_saddle_points: if True, also include points where the curve starts to plateau
         """
         local_extrema = []
         last_direction = 0
@@ -653,9 +814,10 @@ class Envelope(SavesToJSON):
             last_direction = direction
         return local_extrema
 
-    def split_at(self, t, change_original=False):
+    def split_at(self, t: float, change_original: bool = False) -> Sequence[T]:
         """
         Splits the Envelope at one or several points and returns a tuple of the pieces
+
         :param t: either the time t or a tuple/list of times t at which to split the curve
         :param change_original: if true, the original Envelope gets turned into the first of the returned tuple
         :return: tuple of Envelopes representing the pieces this has been split into
@@ -728,53 +890,89 @@ class Envelope(SavesToJSON):
             return cls.from_levels_and_durations(json_dict['levels'], json_dict['durations'],
                                                  curve_shapes, offset)
 
-    def is_shifted_version_of(self, other):
-        assert isinstance(other, Envelope)
-        return all(x.is_shifted_version_of(y) for x, y in zip(self.segments, other.segments))
+    def is_shifted_version_of(self, other: T, tolerance: float = 1e-10) -> bool:
+        """
+        Determines if this segment is simply a shifted version of another segment
 
-    def shift_vertical(self, amount):
-        assert isinstance(amount, numbers.Number)
+        :param other: another EnvelopeSegment
+        :param tolerance: how close it needs to be to count as the same
+        """
+        assert isinstance(other, Envelope)
+        return all(x.is_shifted_version_of(y, tolerance) for x, y in zip(self.segments, other.segments))
+
+    def shift_vertical(self, amount) -> T:
+        """
+        Shifts the levels of this Envelope the specified amount.
+
+        :param amount: the amount to shift up and down by
+        :return: self, for chaining purposes
+        """
         for segment in self.segments:
             segment.shift_vertical(amount)
         return self
 
-    def scale_vertical(self, amount):
-        assert isinstance(amount, numbers.Number)
+    def scale_vertical(self, amount) -> T:
+        """
+        Scales the levels of this segment by the specified amount.
+
+        :param amount: amount to scale output by
+        :return: self, for chaining purposes
+        """
         for segment in self.segments:
             segment.scale_vertical(amount)
         return self
 
-    def shift_horizontal(self, amount):
-        assert isinstance(amount, numbers.Number)
+    def shift_horizontal(self, amount: float) -> T:
+        """
+        Shifts the domain of this Envelope by the specified amount.
+
+        :param amount: the amount to shift the domain by
+        :return: self, for chaining purposes
+        """
         for segment in self.segments:
             segment.shift_horizontal(amount)
         return self
 
-    def scale_horizontal(self, amount):
-        assert isinstance(amount, numbers.Number)
+    def scale_horizontal(self, amount: float) -> T:
+        """
+        Scales the domain of this Envelope by the specified amount.
+
+        :param amount: amount to scale domain by
+        :return: self, for chaining purposes
+        """
         for segment in self.segments:
             segment.scale_horizontal(amount)
         return self
 
-    def get_graphable_point_pairs(self, resolution=25):
+    def _get_graphable_point_pairs(self, resolution=25):
         x_values = []
         y_values = []
         for i, segment in enumerate(self.segments):
             # only include the endpoint on the very last segment, since otherwise there would be repeats
-            segment_x_values, segment_y_values = segment.get_graphable_point_pairs(
+            segment_x_values, segment_y_values = segment._get_graphable_point_pairs(
                 resolution=resolution, endpoint=(i == len(self.segments) - 1)
             )
             x_values.extend(segment_x_values)
             y_values.extend(segment_y_values)
         return x_values, y_values
 
-    def show_plot(self, title=None, resolution=25, show_segment_divisions=True, x_range=None, y_range=None):
+    def show_plot(self, title: str = None, resolution: int = 25, show_segment_divisions: bool = True,
+                  x_range: Tuple[float, float] = None, y_range: Tuple[float, float] = None) -> None:
+        """
+        Shows a plot of this Envelope using matplotlib.
+
+        :param title: A title to give the plot.
+        :param resolution: number of points to use per envelope segment
+        :param show_segment_divisions: Whether or not to place dots at the division points between envelope segments
+        :param x_range: min and max value shown on the x-axis
+        :param y_range: min and max value shown on the y-axis
+        """
         try:
             import matplotlib.pyplot as plt
         except ImportError:
             raise ImportError("Could not find matplotlib, which is needed for plotting.")
         fig, ax = plt.subplots()
-        ax.plot(*self.get_graphable_point_pairs(resolution))
+        ax.plot(*self._get_graphable_point_pairs(resolution))
         if show_segment_divisions:
             ax.plot(self.times, self.levels, 'o')
         if x_range is not None:
@@ -786,8 +984,8 @@ class Envelope(SavesToJSON):
 
     @staticmethod
     def _apply_binary_operation_to_pair(envelope1, envelope2, binary_function):
-        envelope1 = deepcopy(envelope1)
-        envelope2 = deepcopy(envelope2)
+        envelope1 = envelope1.duplicate()
+        envelope2 = envelope2.duplicate()
         for t in set(envelope1.times + envelope2.times):
             envelope1.insert_interpolated(t)
             envelope2.insert_interpolated(t)

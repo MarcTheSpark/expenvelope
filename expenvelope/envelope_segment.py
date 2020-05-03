@@ -12,7 +12,10 @@ from ._utilities import _make_envelope_segments_from_function, _curve_shape_from
     _get_curvature_from_filled_amount
 import numbers
 import math
-from typing import Union, Tuple
+from typing import Union, Tuple, TypeVar
+
+
+T = TypeVar('T', bound='EnvelopeSegment')
 
 
 class EnvelopeSegment:
@@ -57,7 +60,7 @@ class EnvelopeSegment:
 
     @classmethod
     def from_endpoints_and_halfway_level(cls, start_time: float, end_time: float,
-                                         start_level, end_level, halfway_level) -> __qualname__:
+                                         start_level, end_level, halfway_level) -> T:
         """
         Construct an EnvelopeSegment with the given start/end times/levels, specifying curve shape indirectly through
         the desired halfway level.
@@ -244,7 +247,7 @@ class EnvelopeSegment:
             self._curve_shape = _get_curvature_from_filled_amount(1 - (desired_integral - low) / (high - low))
         self._calculate_coefficients()
 
-    def split_at(self, t: float) -> Tuple[__qualname__, __qualname__]:
+    def split_at(self, t: float) -> Tuple[T, T]:
         """
         Split this segment into two EnvelopeSegment's without altering the curve shape and return them.
         This segment is altered in the process.
@@ -265,13 +268,13 @@ class EnvelopeSegment:
         self._calculate_coefficients()
         return self, new_segment
 
-    def clone(self) -> __qualname__:
+    def clone(self) -> T:
         """
         Make a duplicate of this segment.
         """
         return EnvelopeSegment(self.start_time, self.end_time, self.start_level, self.end_level, self.curve_shape)
 
-    def shift_vertical(self, amount) -> __qualname__:
+    def shift_vertical(self, amount) -> T:
         """
         Shifts the output of this segment by the specified amount.
 
@@ -283,7 +286,7 @@ class EnvelopeSegment:
         self._calculate_coefficients()
         return self
 
-    def scale_vertical(self, amount) -> __qualname__:
+    def scale_vertical(self, amount) -> T:
         """
         Scales the output of this segment by the specified amount.
 
@@ -295,7 +298,7 @@ class EnvelopeSegment:
         self._calculate_coefficients()
         return self
 
-    def shift_horizontal(self, amount: float) -> __qualname__:
+    def shift_horizontal(self, amount: float) -> T:
         """
         Shifts the domain of this segment by the specified amount.
 
@@ -307,7 +310,7 @@ class EnvelopeSegment:
         self.end_time += amount
         return self
 
-    def scale_horizontal(self, amount: float) -> __qualname__:
+    def scale_horizontal(self, amount: float) -> T:
         """
         Scales the domain of this segment by the specified amount.
 
@@ -318,7 +321,7 @@ class EnvelopeSegment:
         self.end_time *= amount
         return self
 
-    def is_shifted_version_of(self, other: __qualname__, tolerance: float = 1e-10) -> bool:
+    def is_shifted_version_of(self, other: T, tolerance: float = 1e-10) -> bool:
         """
         Determines if this segment is simply a shifted version of another segment
 

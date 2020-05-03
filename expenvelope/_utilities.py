@@ -12,8 +12,8 @@ def _make_envelope_segments_from_function(function, domain_start, domain_end, re
     key_points = _get_extrema_and_inflection_points(function, domain_start, domain_end,
                                                     key_point_precision, key_point_iterations)
     if resolution_multiple > 1:
-        key_points = [l + k * (r - l) / resolution_multiple
-                      for l, r in zip(key_points[:-1], key_points[1:])
+        key_points = [left + k * (right - left) / resolution_multiple
+                      for left, right in zip(key_points[:-1], key_points[1:])
                       for k in range(resolution_multiple)] + [key_points[-1]]
 
     segments = []
@@ -137,7 +137,7 @@ def _curve_shape_from_start_mid_and_end_levels(start_level, halfway_level, end_l
 # ----------------------------------------- curvature to % filled utilities ----------------------------------------
 
 
-def get_filled_amount_from_curvature(curvature):
+def _get_filled_amount_from_curvature(curvature):
     """
     For a given segment going from low to high, the proportion of the area between the low mark and the curve divided
     by the area between the low mark and the high mark can vary from 0 (as curvature approaches infinity) to 1
@@ -153,10 +153,10 @@ to do the inverse. We use a resolution of 0.001 for the range between -20 and 20
 is so large that we can invert a simplified function analytically.
 """
 _curvature_values = [x / 1000 for x in reversed(range(-20000, 20001))]
-_filled_amount_as_function_of_curvature = [get_filled_amount_from_curvature(s) for s in _curvature_values]
+_filled_amount_as_function_of_curvature = [_get_filled_amount_from_curvature(s) for s in _curvature_values]
 
 
-def get_curvature_from_filled_amount(filled_amount):
+def _get_curvature_from_filled_amount(filled_amount):
     """
     For a given segment going from low to high, returns the curvature for a given portion of the area described above
     that is filled. from tests, the max error here is about 2 * 10^-9, occurring right at the switch from table lookup
