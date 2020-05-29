@@ -168,7 +168,8 @@ def _get_curvature_from_filled_amount(filled_amount):
         upper_percent = _filled_amount_as_function_of_curvature[index]
         lower_percent = _filled_amount_as_function_of_curvature[index - 1]
         fractional_part = (filled_amount - lower_percent) / (upper_percent - lower_percent)
-        return _curvature_values[index - 1] + fractional_part * (_curvature_values[index] - _curvature_values[index - 1])
+        return _curvature_values[index - 1] + \
+               fractional_part * (_curvature_values[index] - _curvature_values[index - 1])
     elif filled_amount > 0.95:
         # for curvature < -20, 1 / S - 1 / (e^S - 1) is almost exactly 1 / S + 1
         # thus we can just act like P_filled = 1 / S + 1, and thus S = 1 / (P_filled - 1)

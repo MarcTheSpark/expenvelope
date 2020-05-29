@@ -9,7 +9,7 @@ mappings onto other kinds of ranges.
 """
 
 from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, SavesToJSON
-from .envelope_segment import *
+from .envelope_segment import EnvelopeSegment
 import numbers
 from typing import Sequence, Union, Callable, Tuple, TypeVar
 
@@ -27,8 +27,9 @@ class Envelope(SavesToJSON):
     Note that generally Envelopes are not constructed directly, but instead by calling one of the class methods,
     such as :func:`Envelope.from_levels_and_durations`.
 
-    :param segments: A list of :class:`envelope_segment.EnvelopeSegment`\ s to initialize the envelope with
-    :ivar segments: list of :class:`envelope_segment.EnvelopeSegment`\ s representing the pieces of this envelope
+    :param segments: A list of :class:`~expenvelope.envelope_segment.EnvelopeSegment`\ s to initialize the envelope with
+    :ivar segments: list of :class:`~expenvelope.envelope_segment.EnvelopeSegment`\ s representing the pieces of this
+        envelope
     """
 
     def __init__(self, segments: Sequence[EnvelopeSegment] = None):
@@ -62,8 +63,8 @@ class Envelope(SavesToJSON):
         return self
 
     @staticmethod
-    def _construct_segments_list( levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
-                                  curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0):
+    def _construct_segments_list(levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
+                                 curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0):
         segments = []
         t = offset
         for i in range(len(levels) - 1):
@@ -120,10 +121,10 @@ class Envelope(SavesToJSON):
         :param constructor_list: Either a flat list that just contains levels, or a list of lists either of the form
             [levels_list, total_duration], [levels_list, durations_list] or [levels_list, durations_list,
             curve_shape_list] for example:
-             - an input of [1, 0.5, 0.3] is interpreted as evenly spaced levels with a total duration of 1
-             - an input of [[1, 0.5, 0.3], 3.0] is interpreted as levels and durations with a total duration of e.g. 3.0
-             - an input of [[1, 0.5, 0.3], [0.2, 0.8]] is interpreted as levels and durations
-             - an input of [[1, 0.5, 0.3], [0.2, 0.8], [2, 0.5]] is interpreted as levels, durations, and curvatures
+            - an input of [1, 0.5, 0.3] is interpreted as evenly spaced levels with a total duration of 1
+            - an input of [[1, 0.5, 0.3], 3.0] is interpreted as levels and durations with a total duration of e.g. 3.0
+            - an input of [[1, 0.5, 0.3], [0.2, 0.8]] is interpreted as levels and durations
+            - an input of [[1, 0.5, 0.3], [0.2, 0.8], [2, 0.5]] is interpreted as levels, durations, and curvatures
         :return: an Envelope constructed accordingly
         """
         assert hasattr(constructor_list, "__len__")
@@ -467,7 +468,7 @@ class Envelope(SavesToJSON):
         :param t: the point at which to insert the point
         :param min_difference: the minimum difference that this point has to be from an existing point on the curve
             in order for a new point to be added.
-        :return the t value at which we interpolated. If we try to insert within min_difference of an existing control
+        :return: the t value at which we interpolated. If we try to insert within min_difference of an existing control
             point, then no new point is added, and we return the t of the nearest control point.
         """
         if t < self.start_time():
@@ -814,7 +815,7 @@ class Envelope(SavesToJSON):
             last_direction = direction
         return local_extrema
 
-    def split_at(self, t: float, change_original: bool = False) -> Sequence[T]:
+    def split_at(self, t: Union[float, Sequence[float]], change_original: bool = False) -> Sequence[T]:
         """
         Splits the Envelope at one or several points and returns a tuple of the pieces
 
