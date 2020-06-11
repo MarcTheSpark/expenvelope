@@ -8,7 +8,8 @@ actually be nearly anything, including, e.g., numpy arrays. All of the functiona
 mappings onto other kinds of ranges.
 """
 
-from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, SavesToJSON
+from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
+from .json_serializer import SavesToJSON
 from .envelope_segment import EnvelopeSegment
 import numbers
 from typing import Sequence, Union, Callable, Tuple, TypeVar
@@ -865,7 +866,7 @@ class Envelope(SavesToJSON):
         else:
             return to_split, second_half.split_at(remaining_splits, change_original=True)
 
-    def _to_json(self):
+    def _to_dict(self):
         json_dict = {'levels': self.levels}
 
         if all(x == self.durations[0] for x in self.durations):
@@ -882,7 +883,7 @@ class Envelope(SavesToJSON):
         return json_dict
 
     @classmethod
-    def _from_json(cls, json_dict):
+    def _from_dict(cls, json_dict):
         curve_shapes = None if 'curve_shapes' not in json_dict else json_dict['curve_shapes']
         offset = 0 if 'offset' not in json_dict else json_dict['offset']
         if 'length' in json_dict:
