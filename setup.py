@@ -27,7 +27,7 @@ setuptools.setup(
     description="Provides musically expressive piecewise-exponential curves.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/MarcTheSpark/expenvelope",
+    url="https://git.sr.ht/~marcevanstein/expenvelope",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
