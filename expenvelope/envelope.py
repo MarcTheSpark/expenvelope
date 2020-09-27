@@ -266,7 +266,7 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def from_function(cls, function: Callable[[float], float], domain_start: float = 0, domain_end: float = 1,
-                      resolution_multiple: int = 2, key_point_precision: int = 100,
+                      resolution_multiple: int = 2, key_point_precision: int = 2000,
                       key_point_iterations: int = 5) -> T:
         """
         Constructs an Envelope that approximates an arbitrary function. By default, the function is split at local

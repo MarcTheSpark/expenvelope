@@ -389,9 +389,8 @@ class EnvelopeSegment:
     def __add__(self, other):
         from .envelope import Envelope
         if isinstance(other, numbers.Number):
-            out = self.clone()
-            out.shift_vertical(other)
-            return out
+            return EnvelopeSegment(self.start_time, self.end_time, self._start_level + other,
+                                   self._end_level + other, self._curve_shape)
         elif isinstance(other, EnvelopeSegment):
             if self.start_time == other.start_time and self.end_time == other.end_time:
                 segments = _make_envelope_segments_from_function(lambda t: self.value_at(t) + other.value_at(t),

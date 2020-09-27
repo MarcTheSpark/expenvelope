@@ -62,7 +62,7 @@ def _make_envelope_segments_from_function(function, domain_start, domain_end, re
     return segments
 
 
-def _get_extrema_and_inflection_points(function, domain_start, domain_end, resolution=100, iterations=5,
+def _get_extrema_and_inflection_points(function, domain_start, domain_end, resolution=2000, iterations=5,
                                        include_endpoints=True, return_on_first_point=False):
     assert resolution >= 10 or iterations == 1, "Resolution should be at least 10 if iteration is being used"
     key_points = []
@@ -79,7 +79,7 @@ def _get_extrema_and_inflection_points(function, domain_start, domain_end, resol
             this_difference = round(this_value - value, 10)
             if first_difference is not None:
                 # check if first difference changes sign in the first derivative
-                if this_difference * first_difference < 0:
+                if math.copysign(1, this_difference) * math.copysign(1, first_difference) < 0:
                     # there's been a change of sign, so there's a local min or max somewhere between the last
                     # step and this one. If we are iterating further, search for the precise location
                     if iterations > 1:
@@ -103,7 +103,7 @@ def _get_extrema_and_inflection_points(function, domain_start, domain_end, resol
 
                 if second_difference is not None:
                     # check if second difference changes sign
-                    if this_second_difference * second_difference < 0:
+                    if math.copysign(1, this_second_difference) * math.copysign(1, second_difference) < 0:
                         # there's been a change of sign, so there's an inflection point somewhere between the last
                         # step and this one. If we are iterating further, search for the precise location
                         if iterations > 1:
