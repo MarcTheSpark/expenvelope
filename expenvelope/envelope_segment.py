@@ -398,7 +398,7 @@ class EnvelopeSegment:
                 if len(segments) == 1:
                     return segments[0]
                 else:
-                    return Envelope(segments)
+                    return Envelope.from_segments(segments)
             else:
                 raise ValueError("EnvelopeSegments can only be added if they have the same time range.")
         else:
@@ -426,7 +426,7 @@ class EnvelopeSegment:
                 if len(segments) == 1:
                     return segments[0]
                 else:
-                    return Envelope(segments)
+                    return Envelope.from_segments(segments)
             else:
                 raise ValueError("EnvelopeSegments can only be added if they have the same time range.")
         else:

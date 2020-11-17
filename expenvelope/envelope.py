@@ -23,6 +23,7 @@ mappings onto other kinds of ranges.
 #  You should have received a copy of the GNU General Public License along with this program.    #
 #  If not, see <http://www.gnu.org/licenses/>.                                                   #
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
+from itertools import zip_longest
 
 from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
 from .json_serializer import SavesToJSON
@@ -41,43 +42,37 @@ class Envelope(SavesToJSON):
     with the intention being to represent a continuously changing musical parameter over time. For instance, an
     Envelope might be used to represent the pitch curve of a glissando, or the volume curve of a forte-piano.
 
-    Note that generally Envelopes are not constructed directly, but instead by calling one of the class methods,
-    such as :func:`Envelope.from_levels_and_durations`.
-
-    :param segments: A list of :class:`~expenvelope.envelope_segment.EnvelopeSegment`\ s to initialize the envelope with
+    :param levels: the levels of the curve. These can be anything that acts like a number. For instance, one could
+        even use numpy arrays as levels.
+    :param durations: the durations of the curve segments. (Should have length one less than levels.)
+    :param curve_shapes: the curve shape values (optional, should have length one less than levels). Generally these
+        will be floats, with the default of 0 representing linear change, > 0 representing late change, and < 0
+        representing early change. It is also possible to use the string "exp" to produce constant proportional
+        change per unit time, so long as the segment does not touch zero. Finally, strings containing "exp", such
+        as "exp ** 2 / 5" will be evaluated with the curve shape required for exponential change being plugged
+        in for the variable "exp".
+    :param offset: starts curve from somewhere other than zero
     :ivar segments: list of :class:`~expenvelope.envelope_segment.EnvelopeSegment`\ s representing the pieces of this
-        envelope
+        envelope.
     """
 
-    def __init__(self, segments: Sequence[EnvelopeSegment] = None):
-
-        if segments is None:
-            # Initialization happens outside of the constructor for smoother subclassing; this way all of the class
-            # methods work correctly on derived classes like TempoEnvelope.
-            self.segments = None
-            self._initialize()
-        else:
-            self.segments = list(segments)
-            assert all(isinstance(x, EnvelopeSegment) for x in self.segments)
-
-    def _initialize(self, levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
-                    curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0) -> T:
-        """
-        Validates the lengths of levels, durations, and curve_shapes, and constructs the list of EnvelopeSegments.
-        """
+    def __init__(self, levels: Sequence = (0,), durations: Sequence[float] = (),
+                 curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0):
         if not hasattr(levels, "__len__"):
             levels = (levels,)
-        assert hasattr(levels, "__len__") and hasattr(durations, "__len__") \
-               and (curve_shapes is None or hasattr(curve_shapes, "__len__"))
-        assert len(levels) > 0, "At least one level is needed to construct an envelope."
-        if len(levels) == 1:
-            levels = levels + levels
-        assert len(durations) == len(levels) - 1, "Inconsistent number of levels and durations given."
-        if curve_shapes is None:
-            curve_shapes = [0] * (len(levels) - 1)
-
+        try:
+            assert hasattr(levels, "__len__") and hasattr(durations, "__len__") \
+                   and (curve_shapes is None or hasattr(curve_shapes, "__len__"))
+            assert len(levels) > 0 and len(durations) == len(levels) - 1
+            if len(levels) == 1:
+                levels = levels + levels
+                durations = (0, )
+            if curve_shapes is None:
+                curve_shapes = [0] * (len(levels) - 1)
+        except AssertionError:
+            raise ValueError("Bad arguments for envelope construction; there must be one fewer durations (and "
+                             "curve shapes, if not None) than levels.")
         self.segments = Envelope._construct_segments_list(levels, durations, curve_shapes, offset)
-        return self
 
     @staticmethod
     def _construct_segments_list(levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
@@ -92,7 +87,19 @@ class Envelope(SavesToJSON):
     # ---------------------------- Class methods --------------------------------
 
     @classmethod
-    def from_levels_and_durations(cls, levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
+    def from_segments(cls, segments: Sequence[EnvelopeSegment]) -> T:
+        """
+        Create a new envelope from a list of :class:`~expenvelope.envelope_segment.EnvelopeSegment`\ s.
+
+        :param segments: list of segments
+        """
+        out = cls()
+        assert all(isinstance(x, EnvelopeSegment) for x in segments)
+        out.segments = segments
+        return out
+
+    @classmethod
+    def from_levels_and_durations(cls, levels: Sequence, durations: Sequence[float],
                                   curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0) -> T:
         """
         Construct an Envelope from levels, durations, and optionally curve shapes.
@@ -100,16 +107,16 @@ class Envelope(SavesToJSON):
         :param levels: the levels of the curve. These can be anything that acts like a number. For instance, one could
             even use numpy arrays as levels.
         :param durations: the durations of the curve segments. (Should have length one less than levels.)
-        :param curve_shapes: the curve shape values (optional, should have length one less than levels). Generally these 
-            will be floats, with the default of 0 representing linear change, > 0 representing late change, and < 0 
+        :param curve_shapes: the curve shape values (optional, should have length one less than levels). Generally these
+            will be floats, with the default of 0 representing linear change, > 0 representing late change, and < 0
             representing early change. It is also possible to use the string "exp" to produce constant proportional
-            change per unit time, so long as the segment does not touch zero. Finally, strings containing "exp", such 
-            as "exp ** 2 / 5" will be evaluated with the curve shape required for exponential change being plugged 
+            change per unit time, so long as the segment does not touch zero. Finally, strings containing "exp", such
+            as "exp ** 2 / 5" will be evaluated with the curve shape required for exponential change being plugged
             in for the variable "exp".
         :param offset: starts curve from somewhere other than zero
         :return: an Envelope constructed accordingly
         """
-        return cls()._initialize(levels, durations, curve_shapes, offset)
+        return cls(levels, durations, curve_shapes, offset)
 
     @classmethod
     def from_levels(cls, levels: Sequence, length: float = 1.0, offset: float = 0) -> T:
@@ -122,13 +129,20 @@ class Envelope(SavesToJSON):
         :param offset: starts curve from somewhere other than zero
         :return: an Envelope constructed accordingly
         """
-        assert len(levels) > 0, "At least one level is needed to construct an envelope."
+        return cls.from_levels_and_durations(
+            *Envelope._levels_and_length_to_levels_durations_and_curves(levels, length), offset
+        )
+
+    @staticmethod
+    def _levels_and_length_to_levels_durations_and_curves(levels: Sequence, length: float):
+        if not len(levels) > 0:
+            raise ValueError("At least one level is needed to construct an envelope.")
         if len(levels) == 1:
             levels = list(levels) * 2
         # just given levels, so we linearly interpolate segments of equal length
         durations = [length / (len(levels) - 1)] * (len(levels) - 1)
         curves = [0.0] * (len(levels) - 1)
-        return cls.from_levels_and_durations(levels, durations, curves, offset)
+        return levels, durations, curves
 
     @classmethod
     def from_list(cls, constructor_list: Sequence) -> T:
@@ -170,15 +184,20 @@ class Envelope(SavesToJSON):
         :param points: list of points, each of which is of the form (time, value) or (time, value, curve_shape)
         :return: an Envelope constructed accordingly
         """
+        return cls(*Envelope._unwrap_points(*points))
+
+    @staticmethod
+    def _unwrap_points(*points: Sequence):
         assert all(len(point) >= 2 for point in points)
         points = tuple(sorted(points, key=lambda point: point[0]))
-        if all(len(point) == 2 for point in points):
-            curve_shapes = None
+        times, levels, *extra = tuple(zip_longest(*points, fillvalue=0))
+        offset = times[0]
+        durations = tuple(b - a for a, b in zip(times[:-1], times[1:]))
+        if len(extra) > 0:
+            curve_shapes = extra[0][:-1] if len(extra[0]) == len(times) else extra[0]
         else:
-            curve_shapes = tuple(points[i][2] if len(points[i]) > 2 else 0 for i in range(len(points)))
-        return cls.from_levels_and_durations(tuple(point[1] for point in points),
-                                             tuple(points[i + 1][0] - points[i][0] for i in range(len(points) - 1)),
-                                             curve_shapes=curve_shapes, offset=points[0][0])
+            curve_shapes = None
+        return levels, durations, curve_shapes, offset
 
     @classmethod
     def release(cls, duration: float, start_level=1, curve_shape: Union[float, str] = None) -> T:
@@ -284,8 +303,8 @@ class Envelope(SavesToJSON):
             We then repeat this narrowing in process, up to this many iterations
         :return: an Envelope constructed accordingly
         """
-        return cls(_make_envelope_segments_from_function(function, domain_start, domain_end, resolution_multiple,
-                                                         key_point_precision, key_point_iterations))
+        return cls.from_segments(_make_envelope_segments_from_function(
+            function, domain_start, domain_end, resolution_multiple, key_point_precision, key_point_iterations))
 
     # ---------------------------- Various Properties --------------------------------
 
@@ -841,7 +860,7 @@ class Envelope(SavesToJSON):
         :return: tuple of Envelopes representing the pieces this has been split into
         """
         cls = type(self)
-        to_split = self if change_original else cls([x.clone() for x in self.segments])
+        to_split = self if change_original else cls.from_segments([x.clone() for x in self.segments])
 
         # if t is a tuple or list, we split at all of those times and return len(t) + 1 segments
         # This is implemented recursively. If len(t) is 1, t is replaced by t[0]
@@ -870,7 +889,7 @@ class Envelope(SavesToJSON):
         to_split.insert_interpolated(t, 0)
         for i, segment in enumerate(to_split.segments):
             if segment.start_time == t:
-                second_half = cls(to_split.segments[i:])
+                second_half = cls.from_segments(to_split.segments[i:])
                 to_split.segments = to_split.segments[:i]
                 for second_half_segment in second_half.segments:
                     second_half_segment.start_time -= t
@@ -1019,12 +1038,12 @@ class Envelope(SavesToJSON):
                 # otherwise, it should just be a segment
                 assert isinstance(this_segment_result, EnvelopeSegment)
                 result_segments.append(this_segment_result)
-        return Envelope(result_segments)
+        return Envelope.from_segments(result_segments)
 
     def _reciprocal(self):
         assert all(x > 0 for x in self.levels) or all(x < 0 for x in self.levels), \
             "Cannot divide by Envelope that crosses zero"
-        return Envelope([segment._reciprocal() for segment in self.segments])
+        return Envelope.from_segments([segment._reciprocal() for segment in self.segments])
 
     def __eq__(self, other):
         if not isinstance(other, Envelope):
@@ -1033,7 +1052,7 @@ class Envelope(SavesToJSON):
 
     def __add__(self, other):
         if isinstance(other, numbers.Number):
-            return Envelope([segment + other for segment in self.segments])
+            return Envelope.from_segments([segment + other for segment in self.segments])
         elif isinstance(other, Envelope):
             return Envelope._apply_binary_operation_to_pair(self, other, lambda a, b: a + b)
         else:
@@ -1043,7 +1062,7 @@ class Envelope(SavesToJSON):
         return self.__add__(other)
 
     def __neg__(self):
-        return Envelope([-segment for segment in self.segments])
+        return Envelope.from_segments([-segment for segment in self.segments])
 
     def __sub__(self, other):
         return self.__add__(-other)
@@ -1053,7 +1072,7 @@ class Envelope(SavesToJSON):
 
     def __mul__(self, other):
         if isinstance(other, numbers.Number):
-            return Envelope([segment * other for segment in self.segments])
+            return Envelope.from_segments([segment * other for segment in self.segments])
         elif isinstance(other, Envelope):
             return Envelope._apply_binary_operation_to_pair(self, other, lambda a, b: a * b)
         else:
