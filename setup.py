@@ -21,7 +21,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="expenvelope",
-    version="0.6.6",
+    version="0.6.7",
     author="Marc Evanstein",
     author_email="marc@marcevanstein.com",
     description="Provides musically expressive piecewise-exponential curves.",

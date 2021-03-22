@@ -904,7 +904,7 @@ class Envelope(SavesToJSON):
     def _to_dict(self):
         json_dict = {'levels': self.levels}
 
-        if all(x == self.durations[0] for x in self.durations):
+        if all(x == self.durations[0] for x in self.durations) and all(x == 0 for x in self.curve_shapes):
             json_dict['length'] = self.length()
         else:
             json_dict['durations'] = self.durations
@@ -1021,14 +1021,36 @@ class Envelope(SavesToJSON):
 
     @staticmethod
     def _apply_binary_operation_to_pair(envelope1, envelope2, binary_function):
-        envelope1 = envelope1.duplicate()
-        envelope2 = envelope2.duplicate()
-        for t in set(envelope1.times + envelope2.times):
-            envelope1.insert_interpolated(t)
-            envelope2.insert_interpolated(t)
+        envelope1_copy = envelope1.duplicate()
+        envelope2_copy = envelope2.duplicate()
+        for t in set(envelope1_copy.times + envelope2_copy.times):
+            envelope1_copy.insert_interpolated(t)
+            envelope2_copy.insert_interpolated(t)
         result_segments = []
-        for s1, s2 in zip(envelope1.segments, envelope2.segments):
-            this_segment_result = binary_function(s1, s2)
+        while len(envelope1_copy.segments) + len(envelope2_copy.segments) > 0:
+            # even though we've inserted interpolated at every key point in either envelope, there could be some
+            # zero-length segments in one envelope that aren't in the other
+            if len(envelope1_copy.segments) == 0:
+                # if we're out of segments in one envelope, it means we have some zero-length end segments in the other
+                # just add them straight onto the result
+                this_segment_result = envelope2_copy.segments.pop(0)
+            elif len(envelope2_copy.segments) == 0:
+                # (and vice-versa)
+                this_segment_result = envelope1_copy.segments.pop(0)
+            else:
+                if envelope1_copy.segments[0].duration == envelope2_copy.segments[0].duration:
+                    # if both envelopes have a segment of the same length, then we apply the binary function
+                    this_segment_result = binary_function(envelope1_copy.segments.pop(0),
+                                                          envelope2_copy.segments.pop(0))
+                elif envelope1_copy.segments[0].duration > 0:
+                    # if one has a duration greater than the other, it should be because the other has a zero-length
+                    # segment. In this case, we just take the zero-length segment and add the start level of the other
+                    assert envelope2_copy.segments[0].duration == 0
+                    this_segment_result = envelope2_copy.segments.pop(0) + envelope1_copy.segments[0].start_level
+                else:
+                    # (and vice-versa)
+                    assert envelope1_copy.segments[0].duration == 0
+                    this_segment_result = envelope1_copy.segments.pop(0) + envelope2_copy.segments[0].start_level
             # when we add or multiply two EnvelopeSegments, we might get an EnvelopeSegment if it's simple
             # or we might get an Envelope if the result is best represented by multiple segments
             if isinstance(this_segment_result, Envelope):

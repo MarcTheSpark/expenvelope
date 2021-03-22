@@ -393,6 +393,9 @@ class EnvelopeSegment:
                                    self._end_level + other, self._curve_shape)
         elif isinstance(other, EnvelopeSegment):
             if self.start_time == other.start_time and self.end_time == other.end_time:
+                if self.duration == 0:
+                    return EnvelopeSegment(self.start_time, self.end_time,
+                                           self.start_level + other.start_level, self.end_level + other.end_level, 0)
                 segments = _make_envelope_segments_from_function(lambda t: self.value_at(t) + other.value_at(t),
                                                                  self.start_time, self.end_time)
                 if len(segments) == 1:
@@ -421,6 +424,9 @@ class EnvelopeSegment:
             return out
         elif isinstance(other, EnvelopeSegment):
             if self.start_time == other.start_time and self.end_time == other.end_time:
+                if self.duration == 0:
+                    return EnvelopeSegment(self.start_time, self.end_time,
+                                           self.start_level * other.start_level, self.end_level * other.end_level, 0)
                 segments = _make_envelope_segments_from_function(lambda t: self.value_at(t) * other.value_at(t),
                                                                  self.start_time, self.end_time)
                 if len(segments) == 1:
