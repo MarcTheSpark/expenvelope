@@ -152,6 +152,12 @@ class EnvelopeSegment:
         """
         return max(self.start_level, self.end_level)
 
+    def min_level(self):
+        """
+        Get the minimum level achieved in this segment
+        """
+        return min(self.start_level, self.end_level)
+
     def average_level(self):
         """
         Get the average level achieved in this segment
@@ -176,6 +182,26 @@ class EnvelopeSegment:
             return abs(self._end_level - self._start_level) / self.duration
         return math.exp(abs(self._curve_shape)) * abs(self._end_level - self._start_level) / self.duration * \
                abs(self._curve_shape) / (math.exp(abs(self._curve_shape)) - 1)
+
+    def start_slope(self):
+        """Get the starting slope of the EnvelopeSegment"""
+        if self.duration == 0:
+            return 0
+        if abs(self._curve_shape) < 0.000001:
+            # essentially linear, so same as average slope
+            return (self._end_level - self._start_level) / self.duration
+        return math.exp(-self._curve_shape) * (self._end_level - self._start_level) / self.duration * \
+            -self._curve_shape / (math.exp(-self._curve_shape) - 1)
+
+    def end_slope(self):
+        """Get the ending slope of the EnvelopeSegment"""
+        if self.duration == 0:
+            return 0
+        if abs(self._curve_shape) < 0.000001:
+            # essentially linear, so same as average slope
+            return (self._end_level - self._start_level) / self.duration
+        return math.exp(self._curve_shape) * (self._end_level - self._start_level) / self.duration * \
+            self._curve_shape / (math.exp(self._curve_shape) - 1)
 
     def value_at(self, t: float, clip_at_boundary: bool = True):
         """

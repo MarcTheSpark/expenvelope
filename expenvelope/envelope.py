@@ -347,9 +347,21 @@ class Envelope(SavesToJSON):
         :param t_range: tuple defining the start and end time of the interval to check. If None, return the max level
             reached over the entire Envelope.
         """
+        return self._get_extremum(t_range, max)
+
+    def min_level(self, t_range: Tuple[float, float] = None):
+        """
+        Returns the lowest value that the Envelope takes over the given range.
+
+        :param t_range: tuple defining the start and end time of the interval to check. If None, return the max level
+            reached over the entire Envelope.
+        """
+        return self._get_extremum(t_range, min)
+
+    def _get_extremum(self, t_range: Tuple[float, float] = None, func=max):
         if t_range is None:
             # checking over the entire range, so that's easy
-            return max(segment.max_level() for segment in self.segments)
+            return func(segment.max_level() if func is max else segment.min_level() for segment in self.segments)
         else:
             # checking over the range (t1, t2), so look at the values at those endpoints and any anchor points between
             assert hasattr(t_range, "__len__") and len(t_range) == 2 and t_range[0] < t_range[1]
@@ -363,7 +375,7 @@ class Envelope(SavesToJSON):
                     points_to_check.append(segment.end_level)
                 if segment.end_time > t2:
                     break
-            return max(points_to_check)
+            return func(points_to_check)
 
     def average_level(self, t_range: Tuple[float, float] = None):
         """
