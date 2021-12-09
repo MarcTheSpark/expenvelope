@@ -127,7 +127,7 @@ class SavesToJSON(metaclass=SavesToJSONMeta):
     def _decoder_object_hook(json_object):
         if "_type" in json_object:
             if json_object["_type"] not in SavesToJSONMeta.names_to_types:
-                raise json.JSONDecodeError("Object type {} not understood.".format(json_object["_type"]))
+                raise ValueError("SCAMP object type {} not understood.".format(json_object["_type"]))
             object_type = SavesToJSONMeta.names_to_types[json_object["_type"]]
             del json_object["_type"]
             return object_type._from_dict(json_object)
