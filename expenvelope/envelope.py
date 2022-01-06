@@ -285,8 +285,8 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def from_function(cls, function: Callable[[float], float], domain_start: float = 0, domain_end: float = 1,
-                      resolution_multiple: int = 2, key_point_precision: int = 2000,
-                      key_point_iterations: int = 5) -> T:
+                      scanning_step_size: float = 0.05, key_point_resolution_multiple: int = 2,
+                      iterations: int = 6, min_key_point_distance: float = 1e-7) -> T:
         """
         Constructs an Envelope that approximates an arbitrary function. By default, the function is split at local
         extrema and inflection points found through a pretty unsophisticated numerical process.
@@ -294,17 +294,19 @@ class Envelope(SavesToJSON):
         :param function: a function from time to level (often a lambda function)
         :param domain_start: the beginning of the function domain range to capture
         :param domain_end: the end of the function domain range to capture
-        :param resolution_multiple: factor by which we add extra key points between the extrema and inflection points
-            to improve the curve fit..
-        :param key_point_precision: precision with which we break up the domain of the function in searching for key
-            points (how many discrete differences we use).
-        :param key_point_iterations: every time a prospective key point is found, we run a more narrow search on that
-            segment of the domain, using smaller step sizes, which gives us a more precise location for the key point.
-            We then repeat this narrowing in process, up to this many iterations
+        :param scanning_step_size: when analyzing the function for discontinuities, maxima and minima, inflection
+            points, etc., use this step size for the initial pass.
+        :param key_point_resolution_multiple: factor by which we add extra key points between the extrema and
+            inflection points to improve the curve fit.
+        :param iterations: when a potential key point is found, we zoom in and scan again in the viscinity of the point.
+            This determines how many iterations of zooming we do.
+        :param min_key_point_distance: after scanning for key points, any that are closer than this distance are merged.
         :return: an Envelope constructed accordingly
         """
         return cls.from_segments(_make_envelope_segments_from_function(
-            function, domain_start, domain_end, resolution_multiple, key_point_precision, key_point_iterations))
+            function, domain_start, domain_end, scanning_step_size=scanning_step_size,
+            keypoint_resolution_multiple=key_point_resolution_multiple, iterations=iterations,
+            min_key_point_distance=min_key_point_distance))
 
     # ---------------------------- Various Properties --------------------------------
 
@@ -713,7 +715,7 @@ class Envelope(SavesToJSON):
                     self.pop_segment_from_start()
                 return
 
-    def append_envelope(self, envelope_to_append: T) -> __qualname__:
+    def append_envelope(self, envelope_to_append: T) -> T:
         """
         Extends this envelope by another one (shifted to start at the end of this one).
         """
