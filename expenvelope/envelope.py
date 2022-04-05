@@ -868,55 +868,46 @@ class Envelope(SavesToJSON):
             last_direction = direction
         return local_extrema
 
-    def split_at(self, t: Union[float, Sequence[float]], change_original: bool = False) -> Sequence[T]:
+    def split_at(self, t: Union[float, Sequence[float]], change_original: bool = False,
+                     zero_out_offsets: bool = True) -> Sequence[T]:
         """
         Splits the Envelope at one or several points and returns a tuple of the pieces
 
         :param t: either the time t or a tuple/list of times t at which to split the curve
         :param change_original: if true, the original Envelope gets turned into the first of the returned tuple
+        :param zero_out_offsets: if true, each new piece is shifted to start at zero
         :return: tuple of Envelopes representing the pieces this has been split into
         """
-        cls = type(self)
-        to_split = self if change_original else cls.from_segments([x.clone() for x in self.segments])
+        if not hasattr(t, '__len__'):
+            return self.split_at((t, ), change_original=change_original)
 
-        # if t is a tuple or list, we split at all of those times and return len(t) + 1 segments
-        # This is implemented recursively. If len(t) is 1, t is replaced by t[0]
-        # If len(t) > 1, then we sort and set aside t[1:] as remaining splits to do on the second half
-        # and set t to t[0]. Note that we subtract t[0] from each of t[1:] to shift it to start from 0
-        remaining_splits = None
-        if hasattr(t, "__len__"):
-            # ignore all split points that are outside this Envelope's range
-            t = [x for x in t if to_split.start_time() <= x <= to_split.end_time()]
-            if len(t) == 0:
-                # if no usable points are left we're done (note we always return a tuple for consistency)
-                return to_split,
+        to_split = self if change_original else self.from_segments([x.clone() for x in self.segments])
+        # ignore all split points outside of the envelope
+        split_points = sorted(x for x in t if to_split.start_time() < x < to_split.end_time())
 
-            if len(t) > 1:
-                t = list(t)
-                t.sort()
-                remaining_splits = [x - t[0] for x in t[1:]]
-            t = t[0]
+        for split_point in split_points:
+            to_split.insert_interpolated(split_point, 0)
 
-        # cover the case of trying to split outside of the Envelope's range
-        # (note we always return a tuple for consistency)
-        if not to_split.start_time() < t < to_split.end_time():
-            return to_split,
+        pieces_segments = []
+        last_split_index = 0
+        while len(split_points) > 0:
+            this_split_point = split_points.pop(0)
+            split_index = to_split._get_index_of_segment_at(this_split_point, right_most=True)
+            pieces_segments.append(to_split.segments[last_split_index: split_index])
+            last_split_index = split_index
+        pieces_segments.append(to_split.segments[last_split_index:])
 
-        # Okay, now we go ahead with a single split at time t
-        to_split.insert_interpolated(t, 0)
-        for i, segment in enumerate(to_split.segments):
-            if segment.start_time == t:
-                second_half = cls.from_segments(to_split.segments[i:])
-                to_split.segments = to_split.segments[:i]
-                for second_half_segment in second_half.segments:
-                    second_half_segment.start_time -= t
-                    second_half_segment.end_time -= t
-                break
+        pieces = []
+        for i, piece_segments in enumerate(pieces_segments):
+            if i == 0:
+                to_split.segments = piece_segments
+                pieces.append(to_split)
+            else:
+                pieces.append(self.from_segments(piece_segments))
+                if zero_out_offsets:
+                    pieces[-1].shift_horizontal(-pieces[-1].start_time())
 
-        if remaining_splits is None:
-            return to_split, second_half
-        else:
-            return to_split, second_half.split_at(remaining_splits, change_original=True)
+        return tuple(pieces)
 
     def _to_dict(self):
         json_dict = {'levels': self.levels}
