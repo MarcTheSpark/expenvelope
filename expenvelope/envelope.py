@@ -816,11 +816,14 @@ class Envelope(SavesToJSON):
                 # Eventually we will get close enough that we're below the max_error
                 return self.get_upper_integration_bound(t2_guess, desired_area - area, max_error=max_error)
         else:
-            # we overshot, so back up to a point that we know must be below the upper integration bound
-            conservative_guess = t1_level / self.max_level((t1, t2_guess)) * (t2_guess - t1) + t1
-            return self.get_upper_integration_bound(
-                conservative_guess, desired_area - self.integrate_interval(t1, conservative_guess), max_error=max_error
-            )
+            # we overshot, so we need to back up to a point below the upper integration bound
+            # try going half as far, and if that fails, half again, etc.
+            trial_width = (t2_guess - t1) / 2
+            while (partial_area := self.integrate_interval(t1, t1 + trial_width)) > desired_area:
+                trial_width /= 2
+            # once we've found a step forward we can take that doesn't overshoot, try getting the
+            # upper integration bound from there, using the remaining area
+            return self.get_upper_integration_bound(t1 + trial_width, desired_area - partial_area, max_error=max_error)
 
     # -------------------------------- Utilities --------------------------------
 
