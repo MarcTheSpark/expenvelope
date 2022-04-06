@@ -1118,4 +1118,4 @@ class Envelope(SavesToJSON):
         return self._reciprocal() * other
 
     def __repr__(self):
-        return "Envelope({}, {}, {}, {})".format(self.levels, self.durations, self.curve_shapes, self.offset)
+        return f"{type(self).__name__}({self.levels}, {self.durations}, {self.curve_shapes}, {self.offset})"

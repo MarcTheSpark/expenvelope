@@ -21,10 +21,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="expenvelope",
-    version="0.6.9",
+    version="0.7.0",
     author="Marc Evanstein",
     author_email="marc@marcevanstein.com",
-    description="Provides musically expressive piecewise-exponential curves.",
+    description="Piecewise-exponential curves designed for musical expressiveness.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://git.sr.ht/~marcevanstein/expenvelope",

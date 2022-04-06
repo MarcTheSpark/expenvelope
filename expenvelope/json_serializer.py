@@ -145,4 +145,9 @@ class SavesToJSON(metaclass=SavesToJSONMeta):
         """
         Returns a copy of this object by serializing to and from JSON.
         """
-        return type(self)._from_dict(deepcopy(self._to_dict()))
+        try:
+            return self._from_dict(deepcopy(self._to_dict()))
+        except TypeError:
+            # in some cases deepcopy is not possible, because some parts of the dictionary can't be serialized
+            # and pickled. In this case, we do the roughly 2x slower option of going to a full JSON string and back
+            return self.json_loads(self.json_dumps())
