@@ -16,9 +16,6 @@
 
 import math
 import bisect
-from abc import ABC, abstractmethod
-from typing import TypeVar, Type
-import json
 
 
 def _make_envelope_segments_from_function(function, domain_start, domain_end, scanning_step_size=0.05,

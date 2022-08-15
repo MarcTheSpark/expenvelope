@@ -286,7 +286,7 @@ class Envelope(SavesToJSON):
     @classmethod
     def from_function(cls, function: Callable[[float], float], domain_start: float = 0, domain_end: float = 1,
                       scanning_step_size: float = 0.05, key_point_resolution_multiple: int = 2,
-                      iterations: int = 6, min_key_point_distance: float = 1e-7) -> T:
+                      iterations: int = 6, min_key_point_distance: float = 1e-7, start_from_zero=True) -> T:
         """
         Constructs an Envelope that approximates an arbitrary function. By default, the function is split at local
         extrema and inflection points found through a pretty unsophisticated numerical process.
@@ -301,12 +301,17 @@ class Envelope(SavesToJSON):
         :param iterations: when a potential key point is found, we zoom in and scan again in the viscinity of the point.
             This determines how many iterations of zooming we do.
         :param min_key_point_distance: after scanning for key points, any that are closer than this distance are merged.
+        :param start_from_zero: if true, the envelope is shifted so that it starts at time zero. Otherwise, it will
+            have an offset equal to `domain_start`
         :return: an Envelope constructed accordingly
         """
-        return cls.from_segments(_make_envelope_segments_from_function(
+        function_env = cls.from_segments(_make_envelope_segments_from_function(
             function, domain_start, domain_end, scanning_step_size=scanning_step_size,
             keypoint_resolution_multiple=key_point_resolution_multiple, iterations=iterations,
             min_key_point_distance=min_key_point_distance))
+        if start_from_zero:
+            function_env.shift_horizontal(-function_env.start_time())
+        return function_env
 
     # ---------------------------- Various Properties --------------------------------
 
@@ -1100,7 +1105,7 @@ class Envelope(SavesToJSON):
         return self.__add__(-other)
 
     def __rsub__(self, other):
-        return self.__radd__(-other)
+        return self.__neg__().__add__(other)
 
     def __mul__(self, other):
         if isinstance(other, numbers.Number):

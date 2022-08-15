@@ -440,7 +440,7 @@ class EnvelopeSegment:
         return self.__add__(-other)
 
     def __rsub__(self, other):
-        return self.__radd__(-other)
+        return self.__neg__().__add__(other)
 
     def __mul__(self, other):
         from .envelope import Envelope
