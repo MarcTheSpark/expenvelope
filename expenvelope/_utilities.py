@@ -49,19 +49,28 @@ def _make_envelope_segments_from_function(function, domain_start, domain_end, sc
     ) if check_for_discontinuities else ()
 
     if len(discontinuities) > 0:
-        # discontinuities is always even in length, containing a point right before and right after each jump/knee
-        discontinuities = [domain_start] + discontinuities + [domain_end]
-        for i in range(0, len(discontinuities), 2):
-            section_start, section_end = discontinuities[i], discontinuities[i + 1]
+        discontinuities.sort()  # just in case
+        x = domain_start
+        for discontinuity_l, discontinuity_r in discontinuities:
+            if discontinuity_l > x:
+                segments.extend(_make_envelope_segments_from_function(
+                    function, x, discontinuity_l, scanning_step_size=scanning_step_size,
+                    keypoint_resolution_multiple=keypoint_resolution_multiple,
+                    slope_change_threshold=slope_change_threshold, iterations=iterations,
+                    min_key_point_distance=min_key_point_distance, check_for_discontinuities=False
+                ))
+            segments.append(EnvelopeSegment(discontinuity_l, discontinuity_r,
+                                            function(discontinuity_l), function(discontinuity_r), 0))
+            x = discontinuity_r
+
+        if x < domain_end:
             segments.extend(_make_envelope_segments_from_function(
-                function, section_start, section_end, scanning_step_size=scanning_step_size,
+                function, x, domain_end, scanning_step_size=scanning_step_size,
                 keypoint_resolution_multiple=keypoint_resolution_multiple,
                 slope_change_threshold=slope_change_threshold, iterations=iterations,
                 min_key_point_distance=min_key_point_distance, check_for_discontinuities=False
             ))
-            if section_end != domain_end:
-                segments.append(EnvelopeSegment(section_end, discontinuities[i + 2], function(section_end),
-                                                function(discontinuities[i + 2]), 0))
+
         return segments
     else:
         key_points = _get_extrema_and_inflection_points(function, domain_start, domain_end,
@@ -111,14 +120,15 @@ def _make_envelope_segments_from_function(function, domain_start, domain_end, sc
 def _get_discontinuities_and_undifferentiable_points(function, domain_start, domain_end, scanning_step_size,
                                                      iterations, slope_change_threshold):
     """
-    Finds jump discontinuities and points where the function is not differentiable, and returns a list of points right
-    before and right after each of these discontinuities.
+    Finds jump discontinuities and points where the function is not differentiable, and returns a list of points to
+    before and right after each of these discontinuities. These take the form of tuples of (location, "l"/"r") where
+    "l" or "r" specifies whether it's to the left or right of the discontinuity.
 
     :param function: a function of one variable
     :param domain_start: where to start in the domain
     :param domain_end: where to end in the domain
     :param scanning_step_size: the step size to use when scanning the function
-    :param iterations: How many iterations of zooming in and bumping the slope_change_threshold to do.
+    :param iterations: How many iterations of zooming in to do. (Decreases by one with each recursive call)
     :param slope_change_threshold: a discontinuity or undifferentiable point is found by looking for a sudden change in
         slope between small scanning steps. If the slope changes by more than this value between successive steps,
         we repeatedly zoom in to that step, cut the scanning_step_size by a factor of 10, and see if this jump remains.
@@ -126,7 +136,9 @@ def _get_discontinuities_and_undifferentiable_points(function, domain_start, dom
         enough iterations. If it's non-differentiable, the change of slope should remain the same. If it's not even
         continuous, the change of slope should approach infinity, which will definitely be over the threshold.
     """
-    x = domain_start
+    # discontinuity_lower_bound keeps track of the farthest back point that a discontinuity could have occured that
+    # we haven't accounted for yet
+    x = discontinuity_lower_bound = domain_start
     last_f_x = function(domain_start)
     last_slope = None
     discontinuities = []
@@ -136,18 +148,28 @@ def _get_discontinuities_and_undifferentiable_points(function, domain_start, dom
         slope = (f_x - last_f_x) / scanning_step_size
         if last_slope is not None and abs(slope - last_slope) > slope_change_threshold:
             # a slope that is suddenly greater or less than the previous slope
+            # if we're only two scanning steps in, then it could have happened at any point since the domain start,
+            # since this was the first opportunity for a sudden slope change. After that point, it has to have happened
+            # in the last scanning step.
+            discontinuity_bounds = (discontinuity_lower_bound, x)
             if iterations <= 0:
-                discontinuities.extend([x - scanning_step_size, x])
+                # no more iterations of zooming in are left, and the slope is still changing suddenly. This means that
+                # this represent an undifferentiable or discontinuous point.
+                discontinuities.append(discontinuity_bounds)
             else:
-                new_bounds = max(domain_start, x - scanning_step_size * 1.1), \
-                             min(domain_end, x + scanning_step_size * 0.1)
+                # Otherwise, we zoom in by a factor of 10
                 discontinuities.extend(_get_discontinuities_and_undifferentiable_points(
-                    function, *new_bounds, scanning_step_size/10, iterations - 1, slope_change_threshold
+                    function, *discontinuity_bounds, scanning_step_size/10, iterations - 1, slope_change_threshold
                 ))
             # if we find a discontinuity, we need to reset last_slope to 0, otherwise it will register both
             # going into the discontinuity and leaving it
             last_slope = None
+            discontinuity_lower_bound = x
         else:
+            if last_slope is not None:
+                # only reset the discontinuity_lower_bound if we've had a chance to compare two slopes
+                # on the very first iteration, we don't have a last slope to compare to
+                discontinuity_lower_bound = x
             last_slope = slope
         last_f_x = f_x
     discontinuities.sort()
