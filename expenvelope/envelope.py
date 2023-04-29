@@ -767,13 +767,19 @@ class Envelope(SavesToJSON):
         """
         if t1 == t2:
             return 0
-        if t2 < t1:
+        elif t2 < t1:
             return -self.integrate_interval(t2, t1)
-        if t1 < self.start_time():
-            return (self.start_time() - t1) * self.segments[0].start_level + \
-                   self.integrate_interval(self.start_time(), t2)
+        elif t1 < t2 <= self.start_time():
+            return (t2 - t1) * self.start_level()
+        elif self.end_time() <= t1 < t2:
+            return (t2 - t1) * self.end_level()
+        elif t1 < self.start_time():
+            # ... but t2 > start time
+            return (self.start_time() - t1) * self.start_level() + self.integrate_interval(self.start_time(), t2)
         if t2 > self.end_time():
+            # ... but t1 < end time
             return (t2 - self.end_time()) * self.end_level() + self.integrate_interval(t1, self.end_time())
+
         # now that the edge conditions are covered, we just add up the segment integrals
         integral = 0
 
@@ -798,7 +804,7 @@ class Envelope(SavesToJSON):
                     integral += segment.integrate_segment(t1, segment.end_time)
         return integral
 
-    def get_upper_integration_bound(self, t1: float, desired_area: float, max_error: float = 0.001) -> float:
+    def get_upper_integration_bound(self, t1: float, desired_area: float, max_error: float = 1e-10) -> float:
         """
         Given a lower integration bound, find the upper bound that will result in the desired integral
 
@@ -807,30 +813,16 @@ class Envelope(SavesToJSON):
         :param max_error: the upper bound is found through a process of successive approximation; once we get within
             this error, the approximation is considered good enough.
         """
-        if desired_area < max_error:
-            return t1
         t1_level = self.value_at(t1)
         t2_guess = desired_area / t1_level + t1
         area = self.integrate_interval(t1, t2_guess)
-        if area <= desired_area:
-            if desired_area - area < max_error:
-                # we hit it almost perfectly and didn't go over
-                return t2_guess
-            else:
-                # we undershot, so start from where we left off.
-                # Eventually we will get close enough that we're below the max_error
-                return self.get_upper_integration_bound(t2_guess, desired_area - area, max_error=max_error)
+        if abs(desired_area - area) < max_error:
+            # we hit it almost perfectly and didn't go over
+            return t2_guess
         else:
-            # we overshot, so we need to back up to a point below the upper integration bound
-            # try going half as far, and if that fails, half again, etc.
-            trial_width = (t2_guess - t1) / 2
-            partial_area = self.integrate_interval(t1, t1 + trial_width)
-            while partial_area > desired_area:
-                trial_width /= 2
-                partial_area = self.integrate_interval(t1, t1 + trial_width)
-            # once we've found a step forward we can take that doesn't overshoot, try getting the
-            # upper integration bound from there, using the remaining area
-            return self.get_upper_integration_bound(t1 + trial_width, desired_area - partial_area, max_error=max_error)
+            # we undershot, so start from where we left off.
+            # Eventually we will get close enough that we're below the max_error
+            return self.get_upper_integration_bound(t2_guess, desired_area - area, max_error=max_error)
 
     # -------------------------------- Utilities --------------------------------
 
@@ -1086,6 +1078,8 @@ class Envelope(SavesToJSON):
         if not isinstance(other, Envelope):
             return False
         return all(this_segment == other_segment for this_segment, other_segment in zip(self.segments, other.segments))
+
+    __hash__ = object.__hash__
 
     def __add__(self, other):
         if isinstance(other, numbers.Number):
