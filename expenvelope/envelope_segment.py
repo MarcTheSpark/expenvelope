@@ -24,11 +24,12 @@ mappings onto other kinds of ranges.
 #  If not, see <http://www.gnu.org/licenses/>.                                                   #
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
 
+from __future__ import annotations
 from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, \
     _get_curvature_from_filled_amount
 import numbers
 import math
-from typing import Union, Tuple, TypeVar
+from typing import TypeVar
 
 
 T = TypeVar('T', bound='EnvelopeSegment')
@@ -51,7 +52,7 @@ class EnvelopeSegment:
     :ivar end_time: the end time of the segment
     """
 
-    def __init__(self, start_time: float, end_time: float, start_level, end_level, curve_shape: Union[float, str]):
+    def __init__(self, start_time: float, end_time: float, start_level, end_level, curve_shape: float | str):
         # note that start_level, end_level, and curvature are properties, since we want
         # to recalculate the constants that we use internally if they are changed.
         self.start_time = start_time
@@ -289,7 +290,7 @@ class EnvelopeSegment:
             self._curve_shape = _get_curvature_from_filled_amount(1 - (desired_integral - low) / (high - low))
         self._calculate_coefficients()
 
-    def split_at(self, t: float) -> Tuple[T, T]:
+    def split_at(self, t: float) -> tuple[T, T]:
         """
         Split this segment into two EnvelopeSegment's without altering the curve shape and return them.
         This segment is altered in the process.

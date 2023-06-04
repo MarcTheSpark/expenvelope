@@ -24,3 +24,6 @@ which defines the :class:`~expenvelope.envelope_segment.EnvelopeSegment` class, 
 
 from .envelope import Envelope
 from .envelope_segment import EnvelopeSegment
+import importlib.metadata
+
+__version__ = importlib.metadata.version('expenvelope')

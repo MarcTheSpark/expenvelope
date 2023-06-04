@@ -23,13 +23,14 @@ mappings onto other kinds of ranges.
 #  You should have received a copy of the GNU General Public License along with this program.    #
 #  If not, see <http://www.gnu.org/licenses/>.                                                   #
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
-from itertools import zip_longest
 
+from __future__ import annotations
+from itertools import zip_longest
 from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
 from .json_serializer import SavesToJSON
 from .envelope_segment import EnvelopeSegment
 import numbers
-from typing import Sequence, Union, Callable, Tuple, TypeVar
+from typing import Sequence, Callable, TypeVar
 
 
 T = TypeVar('T', bound='Envelope')
@@ -57,7 +58,7 @@ class Envelope(SavesToJSON):
     """
 
     def __init__(self, levels: Sequence = (0,), durations: Sequence[float] = (),
-                 curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0):
+                 curve_shapes: Sequence[float | str] = None, offset: float = 0):
         if not hasattr(levels, "__len__"):
             levels = (levels,)
         try:
@@ -76,7 +77,7 @@ class Envelope(SavesToJSON):
 
     @staticmethod
     def _construct_segments_list(levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
-                                 curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0):
+                                 curve_shapes: Sequence[float | str] = None, offset: float = 0):
         segments = []
         t = offset
         for i in range(len(levels) - 1):
@@ -100,7 +101,7 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def from_levels_and_durations(cls, levels: Sequence, durations: Sequence[float],
-                                  curve_shapes: Sequence[Union[float, str]] = None, offset: float = 0) -> T:
+                                  curve_shapes: Sequence[float | str] = None, offset: float = 0) -> T:
         """
         Construct an Envelope from levels, durations, and optionally curve shapes.
 
@@ -200,7 +201,7 @@ class Envelope(SavesToJSON):
         return levels, durations, curve_shapes, offset
 
     @classmethod
-    def release(cls, duration: float, start_level=1, curve_shape: Union[float, str] = None) -> T:
+    def release(cls, duration: float, start_level=1, curve_shape: float | str = None) -> T:
         """
         Construct an simple decaying envelope
         
@@ -214,7 +215,7 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def ar(cls, attack_length: float, release_length: float, peak_level=1,
-            attack_shape: Union[float, str] = None, release_shape: Union[float, str] = None) -> T:
+            attack_shape: float | str = None, release_shape: float | str = None) -> T:
         """
         Construct an attack/release envelope
 
@@ -235,7 +236,7 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def asr(cls, attack_length: float, sustain_level, sustain_length: float, release_length: float,
-            attack_shape: Union[float, str] = None, release_shape: Union[float, str] = None) -> T:
+            attack_shape: float | str = None, release_shape: float | str = None) -> T:
         """
         Construct an attack/sustain/release envelope
 
@@ -257,8 +258,8 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def adsr(cls, attack_length: float, attack_level, decay_length: float, sustain_level, sustain_length: float,
-             release_length: float, attack_shape: Union[float, str] = None, decay_shape: Union[float, str] = None,
-             release_shape: Union[float, str] = None) -> T:
+             release_length: float, attack_shape: float | str = None, decay_shape: float | str = None,
+             release_shape: float | str = None) -> T:
         """
         Construct a standard attack/decay/sustain/release envelope
 
@@ -347,7 +348,7 @@ class Envelope(SavesToJSON):
         """
         return self.segments[-1].end_level
 
-    def max_level(self, t_range: Tuple[float, float] = None):
+    def max_level(self, t_range: tuple[float, float] = None):
         """
         Returns the highest value that the Envelope takes over the given range.
 
@@ -356,7 +357,7 @@ class Envelope(SavesToJSON):
         """
         return self._get_extremum(t_range, max)
 
-    def min_level(self, t_range: Tuple[float, float] = None):
+    def min_level(self, t_range: tuple[float, float] = None):
         """
         Returns the lowest value that the Envelope takes over the given range.
 
@@ -365,7 +366,7 @@ class Envelope(SavesToJSON):
         """
         return self._get_extremum(t_range, min)
 
-    def _get_extremum(self, t_range: Tuple[float, float] = None, func=max):
+    def _get_extremum(self, t_range: tuple[float, float] = None, func=max):
         if t_range is None:
             # checking over the entire range, so that's easy
             return func(segment.max_level() if func is max else segment.min_level() for segment in self.segments)
@@ -384,7 +385,7 @@ class Envelope(SavesToJSON):
                     break
             return func(points_to_check)
 
-    def average_level(self, t_range: Tuple[float, float] = None):
+    def average_level(self, t_range: tuple[float, float] = None):
         """
         Returns the average value that the Envelope takes over the given range.
 
@@ -426,7 +427,7 @@ class Envelope(SavesToJSON):
         return tuple(segment.start_time for segment in self.segments) + (self.end_time(),)
 
     @property
-    def curve_shapes(self) -> Sequence[Union[float, str]]:
+    def curve_shapes(self) -> Sequence[float | str]:
         """
         Tuple of all the segment curve shapes.
         """
@@ -644,7 +645,7 @@ class Envelope(SavesToJSON):
             self.segments.insert(0, EnvelopeSegment(self.start_time() - duration, self.start_time(),
                                                     level, self.start_level(), curve_shape))
 
-    def pop_segment(self) -> Union[EnvelopeSegment, None]:
+    def pop_segment(self) -> EnvelopeSegment | None:
         """
         Remove and return the last segment of this Envelope.
         If there is only one segment, reduce it to length zero and return None.
@@ -659,7 +660,7 @@ class Envelope(SavesToJSON):
                 raise IndexError("Cannot pop from empty Envelope")
         return self.segments.pop()
 
-    def pop_segment_from_start(self) -> Union[EnvelopeSegment, None]:
+    def pop_segment_from_start(self) -> EnvelopeSegment | None:
         """
         Remove and return the first segment of this Envelope.
         If there is only one segment, reduce it to length zero and return None.
@@ -867,7 +868,7 @@ class Envelope(SavesToJSON):
             last_direction = direction
         return local_extrema
 
-    def split_at(self, t: Union[float, Sequence[float]], change_original: bool = False,
+    def split_at(self, t: float | Sequence[float], change_original: bool = False,
                      zero_out_offsets: bool = True) -> Sequence[T]:
         """
         Splits the Envelope at one or several points and returns a tuple of the pieces
@@ -1001,7 +1002,7 @@ class Envelope(SavesToJSON):
         return x_values, y_values
 
     def show_plot(self, title: str = None, resolution: int = 25, show_segment_divisions: bool = True,
-                  x_range: Tuple[float, float] = None, y_range: Tuple[float, float] = None) -> None:
+                  x_range: tuple[float, float] = None, y_range: tuple[float, float] = None) -> None:
         """
         Shows a plot of this Envelope using matplotlib.
 
