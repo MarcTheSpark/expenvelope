@@ -27,3 +27,4 @@ from .envelope_segment import EnvelopeSegment
 import importlib.metadata
 
 __version__ = importlib.metadata.version('expenvelope')
+__author__ = importlib.metadata.metadata('expenvelope')['Author']
