@@ -31,6 +31,12 @@ from .json_serializer import SavesToJSON
 from .envelope_segment import EnvelopeSegment
 import numbers
 from typing import Sequence, Callable, TypeVar
+import re
+
+
+_ease_pattern = re.compile(
+    r"""^ease\(\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*\)$"""
+)
 
 
 T = TypeVar('T', bound='Envelope')
@@ -76,12 +82,19 @@ class Envelope(SavesToJSON):
         self.segments = Envelope._construct_segments_list(levels, durations, curve_shapes, offset)
 
     @staticmethod
-    def _construct_segments_list(levels: Sequence = (0, 0), durations: Sequence[float] = (0,),
-                                 curve_shapes: Sequence[float | str] = None, offset: float = 0):
+    def _construct_segments_list(levels: Sequence, durations: Sequence[float],
+                                 curve_shapes: Sequence[float | str], offset: float):
         segments = []
         t = offset
         for i in range(len(levels) - 1):
-            segments.append(EnvelopeSegment(t, t + durations[i], levels[i], levels[i + 1], curve_shapes[i]))
+            if isinstance(curve_shapes[i], str) and (m := _ease_pattern.match(curve_shapes[i])):
+                ease_amount = float(m.group(1))
+                segments.append(EnvelopeSegment(t, t + durations[i] / 2, levels[i],
+                                                (levels[i] + levels[i + 1]) / 2, ease_amount))
+                segments.append(EnvelopeSegment(t + durations[i] / 2, t + durations[i],
+                                                (levels[i] + levels[i + 1]) / 2, levels[i + 1], -ease_amount))
+            else:
+                segments.append(EnvelopeSegment(t, t + durations[i], levels[i], levels[i + 1], curve_shapes[i]))
             t += durations[i]
         return segments
 
