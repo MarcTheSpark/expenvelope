@@ -941,6 +941,31 @@ class Envelope(SavesToJSON):
 
         return tuple(pieces)
 
+    def simplified(self, use_curvature=True, include_saddle_points=True) -> T:
+        """
+        Simplifies the envelope to only extrema and inflection points.
+
+        :param use_curvature: if True, adjusts the curvature of the segments to match the half-way point between
+            key points. If False, linearly interpolate between key points.
+        :param include_saddle_points: if True, include saddle points as well as extrema
+        """
+        extrema = self.local_extrema(include_saddle_points=include_saddle_points)
+        key_points = [self.start_time(), *extrema, self.end_time()]
+        segments = [
+            EnvelopeSegment.from_endpoints_and_halfway_level(
+                t1, t2,
+                self.value_at(t1), self.value_at(t2), self.value_at((t1 + t2) / 2)
+            ) if use_curvature and self.value_at(t1) < self.value_at((t1 + t2) / 2) < self.value_at(t2) else
+            EnvelopeSegment(
+                t1, t2,
+                self.value_at(t1), self.value_at(t2),
+                0
+            )
+            for t1, t2 in zip(key_points[:-1], key_points[1:])
+        ]
+
+        return type(self).from_segments(segments)
+
     def _to_dict(self):
         json_dict = {'levels': self.levels}
 
