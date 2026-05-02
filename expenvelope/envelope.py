@@ -814,16 +814,35 @@ class Envelope(SavesToJSON):
         :param max_error: the upper bound is found through a process of successive approximation; once we get within
             this error, the approximation is considered good enough.
         """
-        t1_level = self.value_at(t1)
-        t2_guess = desired_area / t1_level + t1
-        area = self.integrate_interval(t1, t2_guess)
-        if abs(desired_area - area) < max_error:
-            # we hit it almost perfectly and didn't go over
-            return t2_guess
+
+        # crude initial guess based on local slope
+        slope = max(self.value_at(t1), 1e-14)
+        t_guess = t1 + desired_area / slope
+
+        # bracket the solution so that we can do binary search within that range
+        if self.integrate_interval(t1, t_guess) < desired_area:
+            # guess is returning too low of an integral (e.g. if the slope of the integrand is negative)
+            # this means that t_guess is a lower bound (t_low). Start t_high at double the distance from t1 than
+            # t_guess, and keep doubling until we go over. Now we have bracketed the solution
+            t_low, t_high = t_guess, t1 + 2 * (t_guess - t1)
+            while self.integrate_interval(t1, t_high) < desired_area:
+                t_high = t1 + 2 * (t_high - t1)
         else:
-            # we undershot, so start from where we left off.
-            # Eventually we will get close enough that we're below the max_error
-            return self.get_upper_integration_bound(t2_guess, desired_area - area, max_error=max_error)
+            # if we're already >= the desired area, then we already have bounds: t1 < t_solution <= t_guess
+            t_low, t_high = t1, t_guess
+
+        # bisect our bracket until it's narrow enough that we are within max error
+        while t_high - t_low > max_error:
+            # look at the midpoint
+            t_mid = 0.5 * (t_low + t_high)
+            if self.integrate_interval(t1, t_mid) < desired_area:
+                # if the integral to that point is too low, it's our new lower bound
+                t_low = t_mid
+            else:
+                # otherwise it's our new upper bound
+                t_high = t_mid
+
+        return 0.5 * (t_low + t_high)
 
     # -------------------------------- Utilities --------------------------------
 
