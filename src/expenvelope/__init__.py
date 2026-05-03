@@ -1,3 +1,11 @@
+"""
+Expenvelope is a library for expressing piecewise exponential curves, with musical applications in mind.
+(This is modeled in some ways on the `Env` class in SuperCollider.) Contents of this package include the `envelope`
+module, which defines the central :class:`~expenvelope.envelope.Envelope` class, and the `envelope_segment` module,
+which defines the :class:`~expenvelope.envelope_segment.EnvelopeSegment` class, out of which an
+:class:`~expenvelope.envelope.Envelope` is built.
+"""
+
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
 #  This file is part of SCAMP (Suite for Computer-Assisted Music in Python)                      #
 #  Copyright © 2020 Marc Evanstein <marc@marcevanstein.com>.                                     #
@@ -14,6 +22,9 @@
 #  If not, see <http://www.gnu.org/licenses/>.                                                   #
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
 
-from setuptools import setup
+from .envelope import Envelope
+from .envelope_segment import EnvelopeSegment
+import importlib.metadata
 
-setup()
+__version__ = importlib.metadata.version('expenvelope')
+__author__ = importlib.metadata.metadata('expenvelope')['Author']
