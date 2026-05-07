@@ -15,7 +15,7 @@ authors = [
 ]
 
 [project.urls]
-"Source Code" = "https://git.sr.ht/~marcevanstein/expenvelope"
+"Source Code" = "https://github.com/MarcTheSpark/expenvelope"
 
 [tool.setuptools]
 zip-safe = false

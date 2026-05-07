@@ -102,7 +102,7 @@ class Envelope(SavesToJSON):
 
     @classmethod
     def from_segments(cls, segments: Sequence[EnvelopeSegment]) -> T:
-        """
+        r"""
         Create a new envelope from a list of :class:`~expenvelope.envelope_segment.EnvelopeSegment`\ s.
 
         :param segments: list of segments
