@@ -818,44 +818,67 @@ class Envelope(SavesToJSON):
                     integral += segment.integrate_segment(t1, segment.end_time)
         return integral
 
-    def get_upper_integration_bound(self, t1: float, desired_area: float, max_error: float = 1e-10) -> float:
+    def get_upper_integration_bound(self, t1: float, desired_area: float, max_error: float = 1e-14) -> float:
         """
-        Given a lower integration bound, find the upper bound that will result in the desired integral
+        Given a lower integration bound, find the upper bound that will result in the desired integral.
+
+        Walks the envelope segment by segment, subtracting each segment's closed-form area until the
+        remaining area falls within a single segment, then inverts that segment using
+        :meth:`EnvelopeSegment.get_t_at_integral` — exactly for constant/linear segments, and to within
+        ``max_error`` for exponential ones.
+
+        Assumes a non-negative integrand, so that the integral increases monotonically (true for tempo
+        and dynamics curves, the primary use). Regions before the first segment and after the last are
+        treated as flat (at the start/end level), matching :meth:`integrate_interval`.
 
         :param t1: lower bound of integration
         :param desired_area: desired value of the integral.
-        :param max_error: the upper bound is found through a process of successive approximation; once we get within
-            this error, the approximation is considered good enough.
+        :param max_error: convergence tolerance forwarded to the per-segment inverse for the exponential
+            case; ignored by the (exact) constant and linear cases.
         """
+        if desired_area == 0:
+            return t1
 
-        # crude initial guess based on local slope
-        slope = max(self.value_at(t1), 1e-14)
-        t_guess = t1 + desired_area / slope
+        remaining = desired_area
+        t = t1
 
-        # bracket the solution so that we can do binary search within that range
-        if self.integrate_interval(t1, t_guess) < desired_area:
-            # guess is returning too low of an integral (e.g. if the slope of the integrand is negative)
-            # this means that t_guess is a lower bound (t_low). Start t_high at double the distance from t1 than
-            # t_guess, and keep doubling until we go over. Now we have bracketed the solution
-            t_low, t_high = t_guess, t1 + 2 * (t_guess - t1)
-            while self.integrate_interval(t1, t_high) < desired_area:
-                t_high = t1 + 2 * (t_high - t1)
-        else:
-            # if we're already >= the desired area, then we already have bounds: t1 < t_solution <= t_guess
-            t_low, t_high = t1, t_guess
+        # region before the envelope: flat at the start level
+        if t < self.start_time():
+            flat_area = (self.start_time() - t) * self.start_level()
+            if flat_area >= remaining:
+                return t + remaining / self.start_level()
+            remaining -= flat_area
+            t = self.start_time()
 
-        # bisect our bracket until it's narrow enough that we are within max error
-        while t_high - t_low > max_error:
-            # look at the midpoint
-            t_mid = 0.5 * (t_low + t_high)
-            if self.integrate_interval(t1, t_mid) < desired_area:
-                # if the integral to that point is too low, it's our new lower bound
-                t_low = t_mid
-            else:
-                # otherwise it's our new upper bound
-                t_high = t_mid
+        # walk the segments, consuming whole-segment areas until the remainder lands inside one
+        for segment in self.segments[self._get_index_of_segment_at(t):]:
+            if segment.end_time <= t:
+                # This branch can happen in two ways:
+                # 1) if the segment length is zero, then t = segment start_time = segment end time; skip it
+                # 2) if t > self.end_time() then self._get_index_of_segment_at(t) still returns the last segment,
+                # and segment.end_time will be strictly < t. Nothing to do with this segment, so continue on to
+                # the flat end part.
+                continue
 
-        return 0.5 * (t_low + t_high)
+            # as we walk the segments, t is generally going to be at segment start time. However, if we start t1
+            # in the middle of a segment, for that first segment we need to integrate from t, not segment.start_time
+            seg_lower = t if t > segment.start_time else segment.start_time
+            # calculate how much area is left in the segment
+            seg_area = segment.integrate_segment(seg_lower, segment.end_time)
+            # if that area is enough to cover the remaining area, the upper integration bound is within this segment
+            # use the segment.get_t_at_integral solver to find out where
+            if seg_area >= remaining:
+                return segment.get_t_at_integral(seg_lower, remaining, max_error)
+            # otherwise, consume all the area this segment has to offer, and put t at the end of it, ready
+            # to walk to the next segment
+            remaining -= seg_area
+            t = segment.end_time
+
+        # region after the envelope: flat at the end level.
+        # either we walked through the whole envelope and ``t`` is now at end_time()
+        # or t1 already started past the end
+        # measure the remaining flat area from whichever it is.
+        return t + remaining / self.end_level()
 
     # -------------------------------- Utilities --------------------------------
 

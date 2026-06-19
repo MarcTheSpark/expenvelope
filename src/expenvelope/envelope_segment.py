@@ -29,10 +29,89 @@ from ._utilities import _make_envelope_segments_from_function, _curve_shape_from
     _get_curvature_from_filled_amount
 import numbers
 import math
+import warnings
 from typing import TypeVar
 
 
 T = TypeVar('T', bound='EnvelopeSegment')
+
+
+def _bracketed_newton(f, f_prime, lo: float, hi: float, max_error: float, max_iterations: int = 80):
+    """
+    Find where an increasing function ``f`` crosses zero, within a bracket ``[lo, hi]`` known to contain
+    the root (``f(lo) <= 0 <= f(hi)``). We combine two root-finders that check each other:
+
+      - Bisection is slow but foolproof: each step we guess at the halfway point, and if it's below zero, move
+        the left bracket up, and if it's above zero move the right bracket down. This halves the interval.
+      - Newton's method is fast but reckless: follow the tangent line to zero to find the next guess.
+        It homes in very quickly, but on an awkward curve can overshoot the bracket entirely.
+
+    So each round of iteration, we:
+      1) tighten the bracket using the sign of ``f(x)`` at the candidate; this is a no-op on the first round,
+         but we do it in this order to avoid duplicate evaluations of `f`.
+      2) calculate the Newton guess, which re-uses the calculated ``f(x)`` from step 1 along with calculating ``f'(x)``
+      3) if it lands in the bracket, that's our new guess; otherwise go with the bisection as our new guess
+
+    Note that the exit condition sits right after tightening the bracket in step 1); if the bracket now is
+    smaller than `max_error`, we've achieved the desired accuracy.
+
+    Assumes ``f`` is increasing with ``f_prime >= 0`` on the interval — the sign logic relies on "``f``
+    reads positive" meaning "right of the root", which only holds for an increasing function. A flat spot
+    (``f_prime == 0``) is fine (we just bisect there); a negative ``f_prime`` violates the assumption and
+    raises ``ValueError``.
+
+    :param f: the (increasing) function whose root we want
+    :param f_prime: the derivative of ``f``
+    :param lo: lower end of a bracket containing the root, where ``f(lo) <= 0``
+    :param hi: upper end of a bracket containing the root, where ``f(hi) >= 0``
+    :param max_error: stop once the bracket width drops to this
+    :param max_iterations: hard cap on iterations (a paranoia backstop; convergence is normally a handful)
+    """
+    # start with guess on the left
+    guess = lo
+    for _ in range(max_iterations):
+        # compute the value for steps 1) and 2)
+        value = f(guess)
+
+        # STEP 1: tighten the bracket
+        if value > 0:
+            # if we sit positive (above the root) tighten from the right
+            hi = guess
+        else:
+            # if non-positive, (below or at the root) tighten from the left
+            lo = guess
+
+        # STEP 1b: exit condition
+        # Once the bracket is smaller than max_error, the current guess is close enough.
+        if hi - lo <= max_error:
+            break
+
+        # STEP 2: Calculate Newton proposal
+        # Newton's proposal: follow the local slope to where a straight line would cross zero.
+        slope = f_prime(guess)
+        if slope > 0:
+            # normal, positive slope (this expects a monotonically increasing function)
+            newton_guess = guess - value / slope
+        elif slope == 0:
+            # flat spot: no tangent to follow, but not decreasing illegally, so fall back to bisection below
+            newton_guess = None
+        else:
+            # negative slope; violates the contract
+            raise ValueError("f_prime < 0 violates the increasing-function assumption of _bracketed_newton")
+
+        # STEP 3: Select new guess
+        if newton_guess is not None and lo < newton_guess < hi:
+            # the newton_guess exists (wasn't flat) and lands within our bracket. Go with that.
+            guess = newton_guess
+        else:
+            # otherwise, bisect to find the next guess
+            guess = 0.5 * (lo + hi)
+    else:
+        # the for-loop ran to completion without ever hitting the `break` (i.e. without converging)
+        warnings.warn(f"_bracketed_newton did not converge within {max_iterations} iterations "
+                      f"(bracket width {hi - lo:g}, tolerance {max_error:g}); returning best guess so far.")
+
+    return guess
 
 
 class EnvelopeSegment:
@@ -94,7 +173,7 @@ class EnvelopeSegment:
 
     def _calculate_coefficients(self):
         # A and _B are constants used in integration, and it's more efficient to just calculate them once.
-        if abs(self._curve_shape) < 0.000001:
+        if abs(self._curve_shape) < 1e-6:
             # the curve shape is essentially zero, so set the constants to none as a flag to use linear interpolation
             self._A = self._B = None
             return
@@ -178,7 +257,7 @@ class EnvelopeSegment:
             # to figure out the temporal resolution needed for smoothness, that doesn't matter; it's supposed to be
             # a discontinuity. So we just return zero as a throwaway.
             return 0
-        if abs(self._curve_shape) < 0.000001:
+        if abs(self._curve_shape) < 1e-6:
             # it's essentially linear, so just return the average slope
             return abs(self._end_level - self._start_level) / self.duration
         return math.exp(abs(self._curve_shape)) * abs(self._end_level - self._start_level) / self.duration * \
@@ -188,7 +267,7 @@ class EnvelopeSegment:
         """Get the starting slope of the EnvelopeSegment"""
         if self.duration == 0:
             return 0
-        if abs(self._curve_shape) < 0.000001:
+        if abs(self._curve_shape) < 1e-6:
             # essentially linear, so same as average slope
             return (self._end_level - self._start_level) / self.duration
         return math.exp(-self._curve_shape) * (self._end_level - self._start_level) / self.duration * \
@@ -198,7 +277,7 @@ class EnvelopeSegment:
         """Get the ending slope of the EnvelopeSegment"""
         if self.duration == 0:
             return 0
-        if abs(self._curve_shape) < 0.000001:
+        if abs(self._curve_shape) < 1e-6:
             # essentially linear, so same as average slope
             return (self._end_level - self._start_level) / self.duration
         return math.exp(self._curve_shape) * (self._end_level - self._start_level) / self.duration * \
@@ -226,17 +305,24 @@ class EnvelopeSegment:
             return self._start_level
         else:
             norm_t = (t - self.start_time) / (self.end_time - self.start_time)
-        if abs(self._curve_shape) < 0.000001:
+        if abs(self._curve_shape) < 1e-6:
             # S is or is essentially zero, so this segment is linear. That limiting case breaks
             # our standard formula, but is easy to simply interpolate
             return self._start_level + norm_t * (self._end_level - self._start_level)
 
-        return self._start_level + (self._end_level - self._start_level) / \
-               (math.exp(self._curve_shape) - 1) * (math.exp(self._curve_shape * norm_t) - 1)
+        # exponential case: use the _segment_level method designed for an exponential curve (which uses _A and _B)
+        return self._segment_level(norm_t)
 
     def _segment_antiderivative(self, normalized_t):
-        # the antiderivative of the interpolation curve y(t) = y1 + (y2 - y1) / (e^S - 1) * (e^(S*t) - 1)
+        # the antiderivative of the interpolation curve y(t) = y1 + (y2 - y1) / (e^S - 1) * (e^(S*t) - 1),
+        # evaluated in normalized time (norm_t over [0, 1]). Its derivative is _segment_level.
         return self._A * normalized_t + self._B * math.exp(self._curve_shape * normalized_t)
+
+    def _segment_level(self, normalized_t):
+        # the level at normalized_t using precomputed constants self._A and self._B. This is the
+        # derivative of _segment_antiderivative, and the exponential level formula shared by value_at() and the
+        # inverse solver. Only valid for the exponential case (self._A/self._B are None for a linear/constant segment).
+        return self._A + self._B * self._curve_shape * math.exp(self._curve_shape * normalized_t)
 
     def integrate_segment(self, t1, t2):
         """
@@ -255,7 +341,7 @@ class EnvelopeSegment:
         norm_t1 = (t1 - self.start_time) / (self.end_time - self.start_time)
         norm_t2 = (t2 - self.start_time) / (self.end_time - self.start_time)
 
-        if abs(self._curve_shape) < 0.000001:
+        if abs(self._curve_shape) < 1e-6:
             # S is or is essentially zero, so this segment is linear. That limiting case breaks
             # our standard formula, but is easy to simple calculate based on average level
             start_level = (1 - norm_t1) * self.start_level + norm_t1 * self.end_level
@@ -265,6 +351,79 @@ class EnvelopeSegment:
         segment_length = self.end_time - self.start_time
 
         return segment_length * (self._segment_antiderivative(norm_t2) - self._segment_antiderivative(norm_t1))
+
+    def get_t_at_integral(self, t1: float, desired_area: float, max_error: float = 1e-14) -> float:
+        """
+        Inverse of :meth:`integrate_segment` within this single segment: given a lower bound ``t1`` inside
+        the segment, find the upper bound ``t2`` (also inside the segment) such that
+        ``integrate_segment(t1, t2) == desired_area``.
+
+        Assumes ``self.start_time <= t1 <= self.end_time``, ``desired_area >= 0``, that the level is
+        non-negative across ``[t1, end_time]`` (so the integral increases monotonically with the upper
+        bound), and that ``desired_area`` does not exceed the area remaining to ``end_time``. The constant
+        and linear cases are solved analytically (exactly); the exponential case is solved with a bracketed
+        Newton iteration converging to ``max_error``.
+
+        :param t1: lower bound of integration, within this segment
+        :param desired_area: the integral we want to achieve, measured forward from ``t1``
+        :param max_error: convergence tolerance for the exponential (bracketed Newton) case; unused in the linear case
+        """
+        if desired_area == 0:
+            return t1
+        length = self.end_time - self.start_time
+        if length == 0:
+            # zero-length (instantaneous) segment holds no area; nothing to invert
+            return self.end_time
+
+        if self._A is None:
+            self._calculate_coefficients()
+
+        # Both solvers work in normalized time (norm_t over [0, 1]); normalize the inputs accordingly,
+        # solve for norm_t2, then de-normalize back to the segment's own time domain.
+        norm_t1 = (t1 - self.start_time) / length
+        norm_area = desired_area / length
+        if self._A is None:
+            norm_t2 = self._find_norm_t2_linear(norm_t1, norm_area)
+        else:
+            norm_t2 = self._find_norm_t2_exponential(norm_t1, norm_area, max_error)
+        return self.start_time + norm_t2 * length
+
+    def _find_norm_t2_linear(self, norm_t1: float, norm_area: float) -> float:
+        """
+        Solve :meth:`get_t_at_integral` for a linear (or constant) segment, in normalized time.
+
+        The area from norm_t1 to norm_t2 is a trapezoid, ``norm_area = Δnorm_t * (l1 + l2) / 2``, where l1 and
+        l2 are the levels at norm_t1 and norm_t2. Since ``l2 = l1 + m*Δnorm_t``, this becomes
+        ``norm_area = l1*Δnorm_t + (m/2)*Δnorm_t²`` — a quadratic in Δnorm_t whose positive root is
+        ``Δnorm_t = (-l1 + √(l1² + 2*m*norm_area)) / m = (-l1 + √(disc)) / m``, where ``disc = l1² + 2*m*norm_area``.
+        We rationalize that (multiply top and bottom by ``l1 + √disc``, and do some algebra) to get the equivalent
+        form ``Δnorm_t = 2*norm_area / (l1 + √disc)``, which has no division by the slope ``m`` and so stays exact
+        and well-defined as ``m → 0`` (the constant-segment case).
+        """
+        m = self._end_level - self._start_level  # slope over normalized [0, 1] domain, so it's just (end - start)
+        l1 = self._start_level + norm_t1 * m  # work forward from the start of the segment to find l1
+        disc = max(l1 ** 2 + 2 * m * norm_area, 0)  # max to avoid floating point nudging it a hair below zero
+        delta_norm_t = 2 * norm_area / (l1 + math.sqrt(disc))
+        return norm_t1 + delta_norm_t
+
+    def _find_norm_t2_exponential(self, norm_t1: float, norm_area: float, max_error: float) -> float:
+        """
+        Solve :meth:`get_t_at_integral` for an exponential segment, in normalized time.
+
+        We want ∫_norm_t1->norm_t2 f(norm_t) dnorm_t = norm_area.
+        Left side = F(norm_t2) - F(norm_t1), where F is self._segment_antiderivative
+        ``F(norm_t2) - F(norm_t1) = norm_area`` can be rearranged to
+        ``0 = F(norm_t2) - F(norm_t1) - norm_area = G(norm_t2)`` for the desired norm_t2, so we simply need to find
+        the zero of G within the interval [0, 1].
+        We do this using a bracketed Newton method, noting that G'(norm_t2) = F'(norm_t2) = f(norm_t2), our
+        normalized curve function _segment_level.
+        """
+        _F_at_norm_t1 = self._segment_antiderivative(norm_t1)  # loop-invariant, so compute it once
+        return _bracketed_newton(
+            f=lambda norm_t2: self._segment_antiderivative(norm_t2) - _F_at_norm_t1 - norm_area,
+            f_prime=self._segment_level,  # the level at norm_t (>= 0); the derivative of f
+            lo=norm_t1, hi=1.0, max_error=max_error
+        )
 
     def get_integral_range(self):
         """
