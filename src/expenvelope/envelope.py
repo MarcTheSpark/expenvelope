@@ -529,19 +529,26 @@ class Envelope(SavesToJSON):
                         segment.end_level = level
                         segment.curve_shape = curve_shape_in
 
-    def insert_interpolated(self, t: float, min_difference: float = 1e-7) -> float:
+    def insert_interpolated(self, t: float, relative_tolerance: float = 1e-7) -> float:
         """
-        Insert another curve point at the given time, without changing the shape of the curve. A point only gets added
-        if it's at least min_difference from all existing control points.
+        Insert another curve point at the given time, without changing the shape of the curve. Returns the
+        t value of the new (or already existing) interpolated point.
+
+        To avoid manufacturing degenerate, near-zero-width segments due to floating point imprecision,
+        a point is only added if it is at least ``relative_tolerance * segment_width`` away from the
+        endpoints of the segment it falls in. If ``t`` lands *within* that tolerance of an existing control point,
+        this function call is assumed to be an idempotent re-insertion of an existing curve point after floating
+        point error has muddied the waters. In this case no point is added, and the existing control point's
+        time is returned instead.
 
         :param t: the point at which to insert the point
-        :param min_difference: the minimum difference that this point has to be from an existing point on the curve
-            in order for a new point to be added.
-        :return: the t value at which we interpolated. If we try to insert within min_difference of an existing control
-            point, then no new point is added, and we return the t of the nearest control point.
+        :param relative_tolerance: how close ``t`` may come to an existing control point before it is treated as
+            coincident with it, expressed as a fraction of the width of the segment containing ``t``.
+        :return: the t value at which we interpolated. If we snapped to an existing control point, its t is
+            returned; otherwise the passed value of ``t`` is returned.
         """
         if t < self.start_time():
-            # we set tolerance to -1 here to ensure that the initial segement doesn't simply get extended
+            # we set tolerance to -1 here to ensure that the initial segment doesn't simply get extended
             # we actually want an extra control point, redundant or not
             self.prepend_segment(self.start_level(), self.start_time() - t, tolerance=-1)
             return t
@@ -549,22 +556,28 @@ class Envelope(SavesToJSON):
             # tolerance set to -1 for same reason as above
             self.append_segment(self.end_level(), t - self.end_time(), tolerance=-1)
             return t
-        if abs(t - self.start_time()) <= min_difference:
-            return self.start_time()
-        if abs(t - self.end_time()) <= min_difference:
+        # the final control point is not contained in any segment (segments are half-open), so check it here
+        if abs(t - self.end_time()) <= relative_tolerance * self.segments[-1].duration:
             return self.end_time()
+
         for i, segment in enumerate(self.segments):
             if t in segment:
-                # this is the case that matters; t is within one of the segments
-                # make sure that we're further than min_difference from either endpoint
-                if abs(t - segment.start_time) <= min_difference:
+                # this is the case that matters; t is within one of the segments.
+                # If we're within relative_tolerance * segment duration of an endpoint,
+                # snap to that endpoint to avoid creating a meaningless sliver segment
+                tolerance = relative_tolerance * segment.duration
+                if abs(t - segment.start_time) <= tolerance:
                     return segment.start_time
-                if abs(t - segment.end_time) <= min_difference:
+                if abs(t - segment.end_time) <= tolerance:
                     return segment.end_time
                 # if not, then we split at this point
                 part1, part2 = segment.split_at(t)
                 self.segments.insert(i + 1, part2)
                 return t
+
+        # every t in [start_time, end_time) lands in exactly one (contiguous) segment, so we should always
+        # have returned above; reaching here means the envelope's segments are malformed (a gap or a NaN)
+        raise ValueError(f"Could not locate t={t} within envelope segments; the segment list is malformed.")
 
     # ----------------------- Appending / removing segments --------------------------
 
@@ -940,8 +953,24 @@ class Envelope(SavesToJSON):
         # ignore all split points outside of the envelope
         split_points = sorted(x for x in t if to_split.start_time() < x < to_split.end_time())
 
+        # now, go through and insert the split points. Note that the insertion process snaps to an existing
+        # envelope control point when the interpolation point is very close, and returns the *snapped* time
+        # in that case. So we build a list of the times that the split points ultimately landed on.
+        snapped_split_points = []
         for split_point in split_points:
-            to_split.insert_interpolated(split_point, 0)
+            snapped = to_split.insert_interpolated(split_point)
+            # Some points just inside the envelope bounds might have snapped to the start or end time.
+            # If so, discard; we don't want any zero-length segments
+            if not (to_split.start_time() < snapped < to_split.end_time()):
+                continue
+            # if the new point (after snapping) duplicates one we already added, discard it
+            if snapped_split_points and snapped == snapped_split_points[-1]:
+                continue
+            # if we reach here, we have an interior split point that does not duplicate one of the
+            # ones we have already added.
+            snapped_split_points.append(snapped)
+        # now we have our list of split points after snapping and deduplication.
+        split_points = snapped_split_points
 
         pieces_segments = []
         last_split_index = 0
