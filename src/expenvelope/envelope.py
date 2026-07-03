@@ -1187,6 +1187,10 @@ class Envelope(SavesToJSON):
     def __eq__(self, other):
         if not isinstance(other, Envelope):
             return False
+        # Must compare segment counts explicitly: zip() stops at the shorter sequence, so without this a
+        # longer envelope whose leading segments match a shorter one would spuriously compare equal
+        if len(self.segments) != len(other.segments):
+            return False
         return all(this_segment == other_segment for this_segment, other_segment in zip(self.segments, other.segments))
 
     __hash__ = object.__hash__
