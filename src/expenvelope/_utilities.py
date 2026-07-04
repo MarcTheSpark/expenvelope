@@ -18,6 +18,23 @@ import math
 import bisect
 
 
+def snap_float_to_nice_decimal(x: float, order_of_magnitude_difference: int = 7) -> float:
+    """
+    If x is near to a nice decimal, this rounds it. E.g., given a number like 8.01399999999999214, we want to round
+    it to 8.014. We do this by comparing what we get if we round coarsely to what we get if we round precisely,
+    where order_of_magnitude_difference represents how much more precise the precise round is than the course round.
+    If they're the same, then we should be rounding.
+
+    :param x: number to snap
+    :param order_of_magnitude_difference: how many orders of magnitude we compare rounding across
+    :return: the rounded value
+    """
+    for first_place in range(0, 17 - order_of_magnitude_difference):
+        if round(x, first_place) == round(x, first_place + order_of_magnitude_difference):
+            return round(x, first_place)
+    return x
+
+
 def _make_envelope_segments_from_function(function, domain_start, domain_end, scanning_step_size=0.05,
                                           keypoint_resolution_multiple=1, slope_change_threshold=0.1,
                                           iterations=5, min_key_point_distance=1e-7, check_for_discontinuities=True):

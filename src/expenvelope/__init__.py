@@ -24,6 +24,7 @@ which defines the :class:`~expenvelope.envelope_segment.EnvelopeSegment` class, 
 
 from .envelope import Envelope
 from .envelope_segment import EnvelopeSegment
+from ._utilities import snap_float_to_nice_decimal
 import importlib.metadata
 
 __version__ = importlib.metadata.version('expenvelope')

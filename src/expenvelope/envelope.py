@@ -26,7 +26,8 @@ mappings onto other kinds of ranges.
 
 from __future__ import annotations
 from itertools import zip_longest
-from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels
+from ._utilities import _make_envelope_segments_from_function, _curve_shape_from_start_mid_and_end_levels, \
+    snap_float_to_nice_decimal
 from .json_serializer import SavesToJSON
 from .envelope_segment import EnvelopeSegment
 import numbers
@@ -430,7 +431,23 @@ class Envelope(SavesToJSON):
         """
         Tuple of all the segment lengths.
         """
-        return tuple(segment.duration for segment in self.segments)
+        return self.get_durations()
+
+    def get_durations(self, rounded: bool = False) -> Sequence[float]:
+        """
+        Tuple of all the segment lengths.
+
+        Segment lengths are derived as ``end_time - start_time``, so an envelope built up on a regular grid
+        (e.g. repeated 0.1-long segments) accumulates floating-point dust in these differences even though each
+        segment was appended with a clean duration. Pass ``rounded=True`` to snap each length to a nearby nice
+        decimal — used for serialization / repr so the intended durations show, without disturbing the exact
+        segment boundary times that the curve math relies on.
+
+        :param rounded: if True, snap each duration to a nearby nice decimal (see
+            :func:`~expenvelope._utilities.snap_float_to_nice_decimal`)
+        """
+        durations = tuple(segment.duration for segment in self.segments)
+        return tuple(snap_float_to_nice_decimal(d) for d in durations) if rounded else durations
 
     @property
     def times(self) -> Sequence[float]:
@@ -1021,10 +1038,11 @@ class Envelope(SavesToJSON):
     def _to_dict(self):
         json_dict = {'levels': self.levels}
 
-        if all(x == self.durations[0] for x in self.durations) and all(x == 0 for x in self.curve_shapes):
-            json_dict['length'] = self.length()
+        durations = self.get_durations(rounded=True)
+        if all(x == durations[0] for x in durations) and all(x == 0 for x in self.curve_shapes):
+            json_dict['length'] = snap_float_to_nice_decimal(self.length())
         else:
-            json_dict['durations'] = self.durations
+            json_dict['durations'] = durations
 
         if any(x != 0 for x in self.curve_shapes):
             json_dict['curve_shapes'] = self.curve_shapes
@@ -1233,4 +1251,5 @@ class Envelope(SavesToJSON):
         return self._reciprocal() * other
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.levels}, {self.durations}, {self.curve_shapes}, {self.offset})"
+        return f"{type(self).__name__}({self.levels}, {self.get_durations(rounded=True)}, " \
+               f"{self.curve_shapes}, {self.offset})"
