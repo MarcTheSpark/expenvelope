@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-21
+
 ### Fixed
 
 - **`integrate_interval`, `get_upper_integration_bound`, and range `max_level`/`min_level`
