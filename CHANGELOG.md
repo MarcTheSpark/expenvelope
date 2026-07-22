@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`integrate_interval`, `get_upper_integration_bound`, and range `max_level`/`min_level`
+  no longer copy the tail of the segment list on every call.** They sliced
+  `self.segments[start_index:]` before iterating, making short queries near the beginning
+  of a long envelope cost time proportional to the envelope's total segment count
+  (~270x slowdown on a 66k-segment envelope). They now iterate by index; results are
+  numerically identical.
+
 ## [0.8.0] - 2026-07-12
 
 ### Added

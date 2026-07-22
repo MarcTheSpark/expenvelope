@@ -390,7 +390,9 @@ class Envelope(SavesToJSON):
             t1, t2 = t_range
             points_to_check = [self.value_at(t1), self.value_at(t2)]
 
-            for segment in self.segments[self._get_index_of_segment_at(t1, left_most=True):]:
+            # iterate by index rather than slicing, so we don't copy the tail of the segment list
+            for index in range(self._get_index_of_segment_at(t1, left_most=True), len(self.segments)):
+                segment = self.segments[index]
                 if t1 <= segment.start_time <= t2:
                     points_to_check.append(segment.start_level)
                 if t1 <= segment.end_time <= t2:
@@ -827,7 +829,10 @@ class Envelope(SavesToJSON):
         # now that the edge conditions are covered, we just add up the segment integrals
         integral = 0
 
-        for segment in self.segments[self._get_index_of_segment_at(t1):]:
+        # iterate by index rather than slicing: a slice copies the whole tail of the segment
+        # list, which is costly when integrating a short interval early in a long envelope
+        for index in range(self._get_index_of_segment_at(t1), len(self.segments)):
+            segment = self.segments[index]
             if t1 < segment.start_time:
                 if t2 > segment.start_time:
                     if t2 <= segment.end_time:
@@ -881,7 +886,9 @@ class Envelope(SavesToJSON):
             t = self.start_time()
 
         # walk the segments, consuming whole-segment areas until the remainder lands inside one
-        for segment in self.segments[self._get_index_of_segment_at(t):]:
+        # (iterating by index rather than slicing, so we don't copy the tail of the segment list)
+        for index in range(self._get_index_of_segment_at(t), len(self.segments)):
+            segment = self.segments[index]
             if segment.end_time <= t:
                 # This branch can happen in two ways:
                 # 1) if the segment length is zero, then t = segment start_time = segment end time; skip it
