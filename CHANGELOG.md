@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`local_extrema(include_saddle_points=True)` now also reports where a plateau gives way
+  to motion**, not just where motion gives way to a plateau. A flat stretch followed by a
+  rise or fall previously dropped the corner at its far end, so the transition looked as
+  though it began back at the plateau's start. `simplified()` inherits the fix.
+
 ## [0.8.1] - 2026-07-27
 
 ### Fixed

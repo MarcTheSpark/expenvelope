@@ -938,26 +938,25 @@ class Envelope(SavesToJSON):
         """
         Returns a list of the times where the curve changes direction.
 
-        :param include_saddle_points: if True, also include points where the curve starts to plateau
+        :param include_saddle_points: if True, also include points where the curve starts or stops plateauing
         """
         local_extrema = []
-        last_direction = 0
+        last_direction = None  # the previous segment's direction, incl. 0 for flat (spots flat<->motion)
+        last_non_zero_direction = None      # the last non-flat direction, carried across plateaus (spots reversals)
         for segment in self.segments:
-            if segment.end_level > segment.start_level:
-                direction = 1
-            elif segment.end_level < segment.start_level:
-                direction = -1
-            else:
-                # if this segment was static, then keep the direction we had going in
-                direction = last_direction
-                # if we want to include saddle points, then check that the last segment was not also flat
-                # (if there's a series of flat segments in a row, only count the first one as a saddle point)
-                if include_saddle_points and last_direction != 0 and segment.start_time not in local_extrema:
-                    local_extrema.append(segment.start_time)
-            if last_direction * direction < 0 and segment.start_time not in local_extrema:
-                # we changed sign, since
+            direction = 1 if segment.end_level > segment.start_level \
+                else -1 if segment.end_level < segment.start_level \
+                else 0
+
+            if direction != 0 and last_non_zero_direction is not None and direction != last_non_zero_direction:
+                # motion reversed (possibly with plateaus in between): a local max or min
+                local_extrema.append(segment.start_time)
+            elif include_saddle_points and last_direction is not None and direction != last_direction:
+                # the curve started or stopped plateauing
                 local_extrema.append(segment.start_time)
             last_direction = direction
+            if direction != 0:
+                last_non_zero_direction = direction
         return local_extrema
 
     def split_at(self, t: float | Sequence[float], change_original: bool = False,
