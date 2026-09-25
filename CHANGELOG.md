@@ -1,15 +1,13 @@
 # Changelog
 
-> These changelogs are AI-written and human-reviewed, because no one (least of all my wife
-> and kids) wants me wasting my precious time meticulously documenting this shit, useful
-> though it may be.
-
 All notable user-facing changes to expenvelope are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.8.2] - 2026-09-25
 
 ### Fixed
 
